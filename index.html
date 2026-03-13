@@ -43,6 +43,16 @@
     background: #fff; font-size: 22px; cursor: pointer; color: #444;
   }
   .qty-val { font-size: 28px; font-weight: 700; min-width: 40px; text-align: center; }
+  .sub-field {
+    margin-top: 12px; padding: 12px; border: 1px solid #e8e8e8;
+    border-radius: 12px; background: #fafafa;
+  }
+  .sub-field-label {
+    font-size: 13px; color: #666; display: block; margin-bottom: 8px; font-weight: 600;
+  }
+  .sub-field-note {
+    font-size: 12px; color: #999; margin-top: 8px; line-height: 1.5;
+  }
   .memo-input {
     font-size: 15px; padding: 10px 14px; border-radius: 10px;
     border: 2px solid #d0d0d0; width: 100%;
@@ -189,6 +199,16 @@
       <span class="qty-val" id="qty-val">1</span>
       <button class="qty-btn" onclick="changeQty(1)">+</button>
     </div>
+
+    <div class="sub-field hidden" id="veneer-section">
+      <label class="sub-field-label">前装冠数（前装冠(Br) の内訳）</label>
+      <div class="qty-row">
+        <button class="qty-btn" onclick="changeVeneerQty(-1)">−</button>
+        <span class="qty-val" id="veneer-qty-val">1</span>
+        <button class="qty-btn" onclick="changeVeneerQty(1)">+</button>
+      </div>
+      <div class="sub-field-note">総歯数とは別に記録します。前装冠数は1以上・総歯数以下になるよう自動調整します。</div>
+    </div>
   </div>
 
   <div class="field">
@@ -227,6 +247,7 @@ const STORAGE_KEY = "prosth-records";
 let records = [];
 let selected = { type: "", material: "", shade: "なし", model: "なし", formType: "なし", formSize: "" };
 let quantity = 1;
+let veneerQuantity = 1;
 let selectedMonth = "";
 
 function todayStr() {
@@ -261,7 +282,11 @@ function renderChips(containerId, items, field) {
     const btn = document.createElement("button");
     btn.className = "chip" + (selected[field] === item ? " selected" : "");
     btn.textContent = item;
-    btn.onclick = () => { selected[field] = item; renderChips(containerId, items, field); };
+    btn.onclick = () => {
+      selected[field] = item;
+      renderChips(containerId, items, field);
+      if (field === "type") renderVeneerSection();
+    };
     el.appendChild(btn);
   });
 }
@@ -299,6 +324,42 @@ function selectSize(v) {
 function changeQty(delta) {
   quantity = Math.max(1, quantity + delta);
   document.getElementById("qty-val").textContent = quantity;
+  if (selected.type === "前装冠(Br)" && veneerQuantity > quantity) {
+    veneerQuantity = quantity;
+    document.getElementById("veneer-qty-val").textContent = veneerQuantity;
+  }
+}
+
+function changeVeneerQty(delta) {
+  veneerQuantity = Math.max(1, Math.min(quantity, veneerQuantity + delta));
+  document.getElementById("veneer-qty-val").textContent = veneerQuantity;
+}
+
+function renderVeneerSection() {
+  const section = document.getElementById("veneer-section");
+  if (selected.type === "前装冠(Br)") {
+    section.className = "sub-field";
+    if (veneerQuantity > quantity) veneerQuantity = quantity;
+    if (veneerQuantity < 1) veneerQuantity = 1;
+    document.getElementById("veneer-qty-val").textContent = veneerQuantity;
+  } else {
+    section.className = "sub-field hidden";
+  }
+}
+
+function formatQtyLabel(r) {
+  if (r.type === "前装冠(Br)" && (r.veneerQuantity || 0) > 0) {
+    return `×${r.quantity}（前装${r.veneerQuantity}）`;
+  }
+  return `×${r.quantity}`;
+}
+
+function totalsLabel(total, veneerTotal = 0) {
+  return veneerTotal > 0 ? `合計 ${total} 歯 / 前装 ${veneerTotal} 歯` : `合計 ${total} 歯`;
+}
+
+function dayTotalLabel(total, veneerTotal = 0) {
+  return veneerTotal > 0 ? `${total}歯 / 前装${veneerTotal}歯` : `${total}歯`;
 }
 
 function showFeedback(msg, ok) {
@@ -320,6 +381,10 @@ function saveRecord() {
     showFeedback("種類と素材を選択してください", false);
     return;
   }
+  if (selected.type === "前装冠(Br)" && (veneerQuantity < 1 || veneerQuantity > quantity)) {
+    showFeedback("前装冠数は1以上かつ総歯数以下にしてください", false);
+    return;
+  }
   const rec = {
     id: genId(),
     date: document.getElementById("inp-date").value,
@@ -330,6 +395,7 @@ function saveRecord() {
     formType: selected.formType,
     formSize: selected.formSize,
     quantity: quantity,
+    veneerQuantity: selected.type === "前装冠(Br)" ? veneerQuantity : 0,
     memo: document.getElementById("inp-memo").value.trim(),
     createdAt: new Date().toISOString()
   };
@@ -343,13 +409,16 @@ function saveRecord() {
   selected.formType = "なし";
   selected.formSize = "";
   quantity = 1;
+  veneerQuantity = 1;
   document.getElementById("qty-val").textContent = "1";
+  document.getElementById("veneer-qty-val").textContent = "1";
   document.getElementById("inp-memo").value = "";
   renderChips("chips-type", TYPES, "type");
   renderChips("chips-material", MATERIALS, "material");
   renderChips("chips-shade", SHADES, "shade");
   renderChips("chips-model", MODELS, "model");
   renderFormType();
+  renderVeneerSection();
 
   showFeedback("登録しました", true);
   renderToday();
@@ -363,7 +432,8 @@ function renderToday() {
   section.className = "";
 
   const total = todayRecs.reduce((s, r) => s + r.quantity, 0);
-  document.getElementById("today-total").textContent = `合計 ${total} 歯`;
+  const veneerTotal = todayRecs.reduce((s, r) => s + (r.veneerQuantity || 0), 0);
+  document.getElementById("today-total").textContent = totalsLabel(total, veneerTotal);
 
   const list = document.getElementById("today-list");
   list.innerHTML = todayRecs.map(r => {
@@ -378,7 +448,7 @@ function renderToday() {
         ${r.memo ? `<span class="record-memo">(${esc(r.memo)})</span>` : ""}
       </div>
       <div style="display:flex;align-items:center">
-        <span class="record-qty">×${r.quantity}</span>
+        <span class="record-qty">${formatQtyLabel(r)}</span>
         <button class="record-del" onclick="deleteRecord('${r.id}')">✕</button>
       </div>
     </div>`;
@@ -410,16 +480,18 @@ function renderHistory() {
 
   const typeCounts = {}, matCounts = {};
   let total = 0;
+  let veneerTotal = 0;
   filtered.forEach(r => {
     typeCounts[r.type] = (typeCounts[r.type] || 0) + r.quantity;
     matCounts[r.material] = (matCounts[r.material] || 0) + r.quantity;
     total += r.quantity;
+    veneerTotal += (r.veneerQuantity || 0);
   });
 
   const sortedEntries = (obj) => Object.entries(obj).sort((a,b) => b[1] - a[1]);
 
   let html = `<div class="summary-box">
-    <div class="summary-title">月間サマリー（合計 ${total} 歯）</div>
+    <div class="summary-title">月間サマリー（${totalsLabel(total, veneerTotal)}）</div>
     <div class="summary-cols">
       <div>
         <div class="summary-col-title">種類別</div>
@@ -429,22 +501,27 @@ function renderHistory() {
         <div class="summary-col-title">素材別</div>
         ${sortedEntries(matCounts).map(([k,v]) => `<div class="summary-item"><span class="summary-item-name">${esc(k)}</span><span class="summary-item-count">${v}</span></div>`).join("")}
       </div>
+      <div>
+        <div class="summary-col-title">前装冠(Br) 内訳</div>
+        <div class="summary-item"><span class="summary-item-name">前装歯数</span><span class="summary-item-count">${veneerTotal}</span></div>
+      </div>
     </div>
   </div>`;
 
   dates.forEach(d => {
     const dayRecs = filtered.filter(r => r.date === d);
     const dayTotal = dayRecs.reduce((s,r) => s + r.quantity, 0);
+    const dayVeneerTotal = dayRecs.reduce((s,r) => s + (r.veneerQuantity || 0), 0);
     html += `<div class="day-group">
       <div class="day-header">
         <span class="day-date">${formatDate(d)}</span>
-        <span class="day-total">${dayTotal}歯</span>
+        <span class="day-total">${dayTotalLabel(dayTotal, dayVeneerTotal)}</span>
       </div>
       ${dayRecs.map(r => {
         const fl = formLabel(r);
         return `<div class="day-record">
           <span>${esc(r.type)} / ${esc(r.material)}${r.shade && r.shade !== "なし" ? ` / ${esc(r.shade)}` : ""}${r.model && r.model !== "なし" ? ` / ${esc(r.model)}` : ""}${fl ? ` [${esc(fl)}]` : ""}${r.memo ? ` (${esc(r.memo)})` : ""}</span>
-          <span class="day-record-qty">×${r.quantity}</span>
+          <span class="day-record-qty">${formatQtyLabel(r)}</span>
         </div>`;
       }).join("")}
     </div>`;
@@ -456,9 +533,9 @@ function renderHistory() {
 function selectMonth(m) { selectedMonth = m; renderHistory(); }
 
 function exportCSV() {
-  const header = "加工日,補綴物種類,使用素材,シェード,模型,加工形態,サイズ,歯数,メモ,登録日時\n";
+  const header = "加工日,補綴物種類,使用素材,シェード,模型,加工形態,サイズ,歯数,前装冠数,メモ,登録日時\n";
   const rows = [...records].sort((a,b) => a.date.localeCompare(b.date))
-    .map(r => `${r.date},${r.type},${r.material},${r.shade||"なし"},${r.model||"なし"},${r.formType||"なし"},${r.formSize||""},${r.quantity},"${(r.memo||"").replace(/"/g,'""')}",${r.createdAt}`)
+    .map(r => `${r.date},${r.type},${r.material},${r.shade||"なし"},${r.model||"なし"},${r.formType||"なし"},${r.formSize||""},${r.quantity},${r.veneerQuantity||0},"${(r.memo||"").replace(/"/g,'""')}",${r.createdAt}`)
     .join("\n");
   const blob = new Blob(["\uFEFF" + header + rows], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
@@ -479,6 +556,7 @@ renderChips("chips-material", MATERIALS, "material");
 renderChips("chips-shade", SHADES, "shade");
 renderChips("chips-model", MODELS, "model");
 renderFormType();
+renderVeneerSection();
 renderToday();
 if (window.navigator.standalone) document.getElementById("install-hint").className = "hidden";
 </script>
