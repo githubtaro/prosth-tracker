@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="加工記録">
+<title>加工記録</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+    background: #fff; color: #1a1a1a; max-width: 540px; margin: 0 auto;
+    min-height: 100vh; min-height: 100dvh;
+  }
+  .header { padding: 20px 20px 0; position: sticky; top: 0; background: #fff; z-index: 10; }
+  .header h1 { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 2px; }
+  .header p { font-size: 12px; color: #bbb; margin-bottom: 12px; }
+  .tabs { display: flex; border-bottom: 1px solid #eee; }
+  .tab {
+    flex: 1; padding: 14px 0; border: none; border-bottom: 3px solid transparent;
+    background: transparent; color: #999; font-weight: 500; font-size: 16px; cursor: pointer;
+  }
+  .tab.active { color: #1a6b4f; border-bottom-color: #1a6b4f; font-weight: 700; }
+  .content { padding: 20px; }
+  .label { font-size: 13px; color: #888; display: block; margin-bottom: 8px; }
+  .field { margin-bottom: 20px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    padding: 10px 18px; border-radius: 10px; border: 2px solid #d0d0d0;
+    background: #fff; color: #444; font-weight: 500; font-size: 15px;
+    cursor: pointer; transition: all 0.15s; min-height: 44px; white-space: nowrap;
+  }
+  .chip.selected { border-color: #1a6b4f; background: #e8f5ee; color: #1a6b4f; font-weight: 700; }
+  .date-input {
+    font-size: 16px; padding: 10px 14px; border-radius: 10px;
+    border: 2px solid #d0d0d0; width: 100%;
+  }
+  .qty-row { display: flex; align-items: center; gap: 16px; }
+  .qty-btn {
+    width: 48px; height: 48px; border-radius: 12px; border: 2px solid #d0d0d0;
+    background: #fff; font-size: 22px; cursor: pointer; color: #444;
+  }
+  .qty-val { font-size: 28px; font-weight: 700; min-width: 40px; text-align: center; }
+  .memo-input {
+    font-size: 15px; padding: 10px 14px; border-radius: 10px;
+    border: 2px solid #d0d0d0; width: 100%;
+  }
+  .btn-save {
+    width: 100%; padding: 16px; border-radius: 12px; border: none;
+    background: #1a6b4f; color: #fff; font-size: 17px; font-weight: 700;
+    cursor: pointer; min-height: 52px;
+  }
+  .btn-export {
+    width: 100%; padding: 14px; border-radius: 12px;
+    border: 2px solid #1a6b4f; background: #fff; color: #1a6b4f;
+    font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 12px;
+  }
+  .feedback { text-align: center; margin-top: 12px; font-size: 14px; font-weight: 600; }
+  .feedback.ok { color: #1a6b4f; }
+  .feedback.err { color: #c0392b; }
+  .today-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .today-label { font-size: 14px; color: #888; }
+  .today-total {
+    font-size: 14px; font-weight: 700; color: #1a6b4f;
+    background: #e8f5ee; padding: 4px 12px; border-radius: 8px;
+  }
+  .record-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 14px; background: #f8f8f8; border-radius: 10px; margin-bottom: 8px;
+  }
+  .record-type { font-weight: 600; font-size: 15px; }
+  .record-mat { color: #888; font-size: 13px; margin-left: 8px; }
+  .record-shade { color: #b08d57; font-size: 13px; margin-left: 6px; }
+  .record-model { color: #2e86ab; font-size: 13px; margin-left: 6px; }
+  .record-form { color: #7a6aad; font-size: 12px; margin-left: 6px; }
+  .record-memo { color: #aaa; font-size: 12px; margin-left: 6px; }
+  .record-qty { font-weight: 700; font-size: 16px; color: #1a6b4f; }
+  .record-del {
+    background: none; border: none; color: #ccc; font-size: 18px;
+    cursor: pointer; padding: 4px 8px; margin-left: 10px;
+  }
+  .month-chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 12px; margin-bottom: 20px; }
+  .month-chip {
+    padding: 8px 16px; border-radius: 8px; white-space: nowrap;
+    border: 2px solid #e0e0e0; background: #fff; color: #666;
+    font-weight: 500; font-size: 14px; cursor: pointer; flex-shrink: 0;
+  }
+  .month-chip.selected { border-color: #1a6b4f; background: #e8f5ee; color: #1a6b4f; font-weight: 700; }
+  .summary-box { background: #f4faf7; border-radius: 12px; padding: 16px; margin-bottom: 20px; }
+  .summary-title { font-size: 13px; color: #888; margin-bottom: 10px; }
+  .summary-cols { display: flex; gap: 20px; flex-wrap: wrap; }
+  .summary-col-title { font-size: 12px; color: #999; margin-bottom: 4px; }
+  .summary-item { font-size: 14px; color: #333; }
+  .summary-item-name { font-weight: 600; }
+  .summary-item-count { color: #1a6b4f; margin-left: 6px; }
+  .day-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding-bottom: 6px; border-bottom: 1px solid #eee; margin-bottom: 8px;
+  }
+  .day-date { font-weight: 700; font-size: 15px; color: #333; }
+  .day-total { font-size: 13px; color: #1a6b4f; font-weight: 600; }
+  .day-record { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; color: #555; }
+  .day-record-qty { font-weight: 600; }
+  .day-group { margin-bottom: 16px; }
+  .empty { text-align: center; padding: 60px 20px; color: #aaa; }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-text { font-size: 15px; }
+  .hidden { display: none; }
+
+  .install-hint {
+    background: #fffbea; border: 1px solid #f0e6b8; border-radius: 10px;
+    padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: #8a7530;
+    line-height: 1.6;
+  }
+  .install-hint strong { color: #6b5a20; }
+  .install-hint .close-hint {
+    background: none; border: none; color: #bba840; font-size: 18px;
+    float: right; cursor: pointer; margin: -4px -4px 0 0;
+  }
+
+  .form-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .form-radio {
+    padding: 10px 18px; border-radius: 10px; border: 2px solid #d0d0d0;
+    background: #fff; color: #444; font-weight: 500; font-size: 15px;
+    cursor: pointer; transition: all 0.15s; min-height: 44px; white-space: nowrap;
+  }
+  .form-radio.selected { border-color: #6a5acd; background: #f0ecff; color: #5a4abf; font-weight: 700; }
+  .size-select {
+    font-size: 16px; padding: 10px 14px; border-radius: 10px;
+    border: 2px solid #d0d0d0; background: #fff; min-height: 44px;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>加工記録</h1>
+  <p>補綴物の加工実績を記録</p>
+  <div class="tabs">
+    <button class="tab active" id="tab-entry" onclick="switchTab('entry')">入力</button>
+    <button class="tab" id="tab-history" onclick="switchTab('history')">履歴</button>
+  </div>
+</div>
+
+<div class="content" id="page-entry">
+
+  <div class="install-hint" id="install-hint">
+    <button class="close-hint" onclick="closeHint()">&times;</button>
+    <strong>ホーム画面に追加するとアプリとして使えます</strong><br>
+    Safari：共有ボタン →「ホーム画面に追加」
+  </div>
+
+  <div class="field">
+    <label class="label">加工日</label>
+    <input type="date" class="date-input" id="inp-date">
+  </div>
+
+  <div class="field">
+    <label class="label">補綴物種類</label>
+    <div class="chips" id="chips-type"></div>
+  </div>
+
+  <div class="field">
+    <label class="label">使用素材</label>
+    <div class="chips" id="chips-material"></div>
+  </div>
+
+  <div class="field">
+    <label class="label">シェード</label>
+    <div class="chips" id="chips-shade"></div>
+  </div>
+
+  <div class="field">
+    <label class="label">模型</label>
+    <div class="chips" id="chips-model"></div>
+  </div>
+
+  <div class="field">
+    <label class="label">加工形態・サイズ</label>
+    <div class="form-row" id="form-type-row"></div>
+  </div>
+
+  <div class="field">
+    <label class="label">歯数</label>
+    <div class="qty-row">
+      <button class="qty-btn" onclick="changeQty(-1)">−</button>
+      <span class="qty-val" id="qty-val">1</span>
+      <button class="qty-btn" onclick="changeQty(1)">+</button>
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="label">メモ（詳細・備考等）</label>
+    <input type="text" class="memo-input" id="inp-memo" placeholder="例: 備考・特記事項">
+  </div>
+
+  <button class="btn-save" onclick="saveRecord()">登録</button>
+  <div class="feedback hidden" id="feedback"></div>
+
+  <div class="hidden" id="today-section" style="margin-top:28px">
+    <div class="today-header">
+      <span class="today-label">今日の記録</span>
+      <span class="today-total" id="today-total"></span>
+    </div>
+    <div id="today-list"></div>
+  </div>
+</div>
+
+<div class="content hidden" id="page-history">
+  <div class="month-chips" id="month-chips"></div>
+  <div id="history-content"></div>
+  <button class="btn-export" onclick="exportCSV()">CSVエクスポート</button>
+</div>
+
+<script>
+const TYPES = ["クラウン", "ブリッジ", "前装冠(Cr)", "前装冠(Br)", "インレー"];
+const MATERIALS = ["銀合金", "チタン", "CAD/CAM冠", "PMMA", "Peek冠", "石膏", "造形レジン", "ジルコニア", "e-max"];
+const MODELS = ["なし", "支台", "3D模型片顎", "3D模型全顎"];
+const SHADES = ["なし", "A1", "A2", "A3", "A3.5"];
+const FORM_TYPES = ["なし", "ディスク", "ブロック"];
+const DISC_SIZES = ["10", "12", "14", "16", "18", "20", "22", "25", "30"];
+const BLOCK_SIZES = ["12", "14", "14L"];
+const STORAGE_KEY = "prosth-records";
+
+let records = [];
+let selected = { type: "", material: "", shade: "なし", model: "なし", formType: "なし", formSize: "" };
+let quantity = 1;
+let selectedMonth = "";
+
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+function monthStr(ds) { return ds.slice(0, 7); }
+function formatDate(ds) { const p = ds.split("-"); return `${+p[1]}/${+p[2]}`; }
+function formatMonth(ms) { const p = ms.split("-"); return `${p[0]}年${+p[1]}月`; }
+function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+
+function loadRecords() {
+  try { records = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
+  catch { records = []; }
+}
+function persistRecords() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+}
+
+function switchTab(tab) {
+  document.getElementById("tab-entry").className = tab === "entry" ? "tab active" : "tab";
+  document.getElementById("tab-history").className = tab === "history" ? "tab active" : "tab";
+  document.getElementById("page-entry").className = tab === "entry" ? "content" : "content hidden";
+  document.getElementById("page-history").className = tab === "history" ? "content" : "content hidden";
+  if (tab === "history") renderHistory();
+}
+
+function renderChips(containerId, items, field) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = "";
+  items.forEach(item => {
+    const btn = document.createElement("button");
+    btn.className = "chip" + (selected[field] === item ? " selected" : "");
+    btn.textContent = item;
+    btn.onclick = () => { selected[field] = item; renderChips(containerId, items, field); };
+    el.appendChild(btn);
+  });
+}
+
+function renderFormType() {
+  const row = document.getElementById("form-type-row");
+  let html = "";
+  FORM_TYPES.forEach(ft => {
+    html += `<button class="form-radio${selected.formType === ft ? " selected" : ""}" onclick="selectFormType('${ft}')">${ft}</button>`;
+  });
+  if (selected.formType === "ディスク") {
+    html += `<select class="size-select" id="sel-size" onchange="selectSize(this.value)">
+      <option value="">サイズ</option>
+      ${DISC_SIZES.map(s => `<option value="${s}"${selected.formSize === s ? " selected" : ""}>${s}mm</option>`).join("")}
+    </select>`;
+  } else if (selected.formType === "ブロック") {
+    html += `<select class="size-select" id="sel-size" onchange="selectSize(this.value)">
+      <option value="">サイズ</option>
+      ${BLOCK_SIZES.map(s => `<option value="${s}"${selected.formSize === s ? " selected" : ""}>${s}</option>`).join("")}
+    </select>`;
+  }
+  row.innerHTML = html;
+}
+
+function selectFormType(ft) {
+  selected.formType = ft;
+  selected.formSize = "";
+  renderFormType();
+}
+
+function selectSize(v) {
+  selected.formSize = v;
+}
+
+function changeQty(delta) {
+  quantity = Math.max(1, quantity + delta);
+  document.getElementById("qty-val").textContent = quantity;
+}
+
+function showFeedback(msg, ok) {
+  const el = document.getElementById("feedback");
+  el.textContent = msg;
+  el.className = "feedback " + (ok ? "ok" : "err");
+  setTimeout(() => { el.className = "feedback hidden"; }, 1800);
+}
+
+function formLabel(r) {
+  if (!r.formType || r.formType === "なし") return "";
+  let s = r.formType;
+  if (r.formSize) s += " " + r.formSize + (r.formType === "ディスク" ? "mm" : "");
+  return s;
+}
+
+function saveRecord() {
+  if (!selected.type || !selected.material) {
+    showFeedback("種類と素材を選択してください", false);
+    return;
+  }
+  const rec = {
+    id: genId(),
+    date: document.getElementById("inp-date").value,
+    type: selected.type,
+    material: selected.material,
+    shade: selected.shade,
+    model: selected.model,
+    formType: selected.formType,
+    formSize: selected.formSize,
+    quantity: quantity,
+    memo: document.getElementById("inp-memo").value.trim(),
+    createdAt: new Date().toISOString()
+  };
+  records.push(rec);
+  persistRecords();
+
+  selected.type = "";
+  selected.material = "";
+  selected.shade = "なし";
+  selected.model = "なし";
+  selected.formType = "なし";
+  selected.formSize = "";
+  quantity = 1;
+  document.getElementById("qty-val").textContent = "1";
+  document.getElementById("inp-memo").value = "";
+  renderChips("chips-type", TYPES, "type");
+  renderChips("chips-material", MATERIALS, "material");
+  renderChips("chips-shade", SHADES, "shade");
+  renderChips("chips-model", MODELS, "model");
+  renderFormType();
+
+  showFeedback("登録しました", true);
+  renderToday();
+}
+
+function renderToday() {
+  const today = document.getElementById("inp-date").value;
+  const todayRecs = records.filter(r => r.date === today);
+  const section = document.getElementById("today-section");
+  if (todayRecs.length === 0) { section.className = "hidden"; return; }
+  section.className = "";
+
+  const total = todayRecs.reduce((s, r) => s + r.quantity, 0);
+  document.getElementById("today-total").textContent = `合計 ${total} 歯`;
+
+  const list = document.getElementById("today-list");
+  list.innerHTML = todayRecs.map(r => {
+    const fl = formLabel(r);
+    return `<div class="record-row">
+      <div>
+        <span class="record-type">${esc(r.type)}</span>
+        <span class="record-mat">${esc(r.material)}</span>
+        ${r.shade && r.shade !== "なし" ? `<span class="record-shade">${esc(r.shade)}</span>` : ""}
+        ${r.model && r.model !== "なし" ? `<span class="record-model">${esc(r.model)}</span>` : ""}
+        ${fl ? `<span class="record-form">${esc(fl)}</span>` : ""}
+        ${r.memo ? `<span class="record-memo">(${esc(r.memo)})</span>` : ""}
+      </div>
+      <div style="display:flex;align-items:center">
+        <span class="record-qty">×${r.quantity}</span>
+        <button class="record-del" onclick="deleteRecord('${r.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function deleteRecord(id) {
+  records = records.filter(r => r.id !== id);
+  persistRecords();
+  renderToday();
+}
+
+function renderHistory() {
+  const months = [...new Set(records.map(r => monthStr(r.date)))].sort().reverse();
+  if (!months.length) {
+    document.getElementById("month-chips").innerHTML = "";
+    document.getElementById("history-content").innerHTML = `
+      <div class="empty"><div class="empty-icon">📋</div><div class="empty-text">まだ記録がありません</div></div>`;
+    return;
+  }
+  if (!selectedMonth || !months.includes(selectedMonth)) selectedMonth = months[0];
+
+  document.getElementById("month-chips").innerHTML = months.map(m =>
+    `<button class="month-chip${selectedMonth === m ? " selected" : ""}" onclick="selectMonth('${m}')">${formatMonth(m)}</button>`
+  ).join("");
+
+  const filtered = records.filter(r => monthStr(r.date) === selectedMonth);
+  const dates = [...new Set(filtered.map(r => r.date))].sort().reverse();
+
+  const typeCounts = {}, matCounts = {};
+  let total = 0;
+  filtered.forEach(r => {
+    typeCounts[r.type] = (typeCounts[r.type] || 0) + r.quantity;
+    matCounts[r.material] = (matCounts[r.material] || 0) + r.quantity;
+    total += r.quantity;
+  });
+
+  const sortedEntries = (obj) => Object.entries(obj).sort((a,b) => b[1] - a[1]);
+
+  let html = `<div class="summary-box">
+    <div class="summary-title">月間サマリー（合計 ${total} 歯）</div>
+    <div class="summary-cols">
+      <div>
+        <div class="summary-col-title">種類別</div>
+        ${sortedEntries(typeCounts).map(([k,v]) => `<div class="summary-item"><span class="summary-item-name">${esc(k)}</span><span class="summary-item-count">${v}</span></div>`).join("")}
+      </div>
+      <div>
+        <div class="summary-col-title">素材別</div>
+        ${sortedEntries(matCounts).map(([k,v]) => `<div class="summary-item"><span class="summary-item-name">${esc(k)}</span><span class="summary-item-count">${v}</span></div>`).join("")}
+      </div>
+    </div>
+  </div>`;
+
+  dates.forEach(d => {
+    const dayRecs = filtered.filter(r => r.date === d);
+    const dayTotal = dayRecs.reduce((s,r) => s + r.quantity, 0);
+    html += `<div class="day-group">
+      <div class="day-header">
+        <span class="day-date">${formatDate(d)}</span>
+        <span class="day-total">${dayTotal}歯</span>
+      </div>
+      ${dayRecs.map(r => {
+        const fl = formLabel(r);
+        return `<div class="day-record">
+          <span>${esc(r.type)} / ${esc(r.material)}${r.shade && r.shade !== "なし" ? ` / ${esc(r.shade)}` : ""}${r.model && r.model !== "なし" ? ` / ${esc(r.model)}` : ""}${fl ? ` [${esc(fl)}]` : ""}${r.memo ? ` (${esc(r.memo)})` : ""}</span>
+          <span class="day-record-qty">×${r.quantity}</span>
+        </div>`;
+      }).join("")}
+    </div>`;
+  });
+
+  document.getElementById("history-content").innerHTML = html;
+}
+
+function selectMonth(m) { selectedMonth = m; renderHistory(); }
+
+function exportCSV() {
+  const header = "加工日,補綴物種類,使用素材,シェード,模型,加工形態,サイズ,歯数,メモ,登録日時\n";
+  const rows = [...records].sort((a,b) => a.date.localeCompare(b.date))
+    .map(r => `${r.date},${r.type},${r.material},${r.shade||"なし"},${r.model||"なし"},${r.formType||"なし"},${r.formSize||""},${r.quantity},"${(r.memo||"").replace(/"/g,'""')}",${r.createdAt}`)
+    .join("\n");
+  const blob = new Blob(["\uFEFF" + header + rows], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `加工記録_${todayStr()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function closeHint() { document.getElementById("install-hint").className = "hidden"; }
+function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+loadRecords();
+document.getElementById("inp-date").value = todayStr();
+renderChips("chips-type", TYPES, "type");
+renderChips("chips-material", MATERIALS, "material");
+renderChips("chips-shade", SHADES, "shade");
+renderChips("chips-model", MODELS, "model");
+renderFormType();
+renderToday();
+if (window.navigator.standalone) document.getElementById("install-hint").className = "hidden";
+</script>
+</body>
+</html>
