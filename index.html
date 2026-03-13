@@ -30,7 +30,7 @@
   .chip {
     padding: 10px 18px; border-radius: 10px; border: 2px solid #d0d0d0;
     background: #fff; color: #444; font-weight: 500; font-size: 15px;
-    cursor: pointer; transition: all 0.15s; min-height: 44px; white-space: nowrap;
+    cursor: pointer; transition: border-color 0.15s, background-color 0.15s, color 0.15s; min-height: 44px; white-space: nowrap;
   }
   .chip.selected { border-color: #1a6b4f; background: #e8f5ee; color: #1a6b4f; font-weight: 700; }
   .date-input {
@@ -134,7 +134,7 @@
   .form-radio {
     padding: 10px 18px; border-radius: 10px; border: 2px solid #d0d0d0;
     background: #fff; color: #444; font-weight: 500; font-size: 15px;
-    cursor: pointer; transition: all 0.15s; min-height: 44px; white-space: nowrap;
+    cursor: pointer; transition: border-color 0.15s, background-color 0.15s, color 0.15s; min-height: 44px; white-space: nowrap;
   }
   .form-radio.selected { border-color: #6a5acd; background: #f0ecff; color: #5a4abf; font-weight: 700; }
   .size-select {
@@ -501,10 +501,10 @@ function renderHistory() {
         <div class="summary-col-title">素材別</div>
         ${sortedEntries(matCounts).map(([k,v]) => `<div class="summary-item"><span class="summary-item-name">${esc(k)}</span><span class="summary-item-count">${v}</span></div>`).join("")}
       </div>
-      <div>
+      ${veneerTotal > 0 ? `<div>
         <div class="summary-col-title">前装冠(Br) 内訳</div>
         <div class="summary-item"><span class="summary-item-name">前装歯数</span><span class="summary-item-count">${veneerTotal}</span></div>
-      </div>
+      </div>` : ""}
     </div>
   </div>`;
 
