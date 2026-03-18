@@ -317,6 +317,7 @@ function renderChips(containerId, items, field) {
       renderChips(containerId, items, field);
       if (field === "type" || field === "material") {
         renderMachineChips();
+        applyAutoSettings();
         if (field === "type") {
           renderVeneerSection();
           updateQtyLabel();
@@ -369,6 +370,23 @@ function renderFormType() {
     </select>`;
   }
   row.innerHTML = html;
+}
+
+function applyAutoSettings() {
+  // 支台 + 石膏 → ディスク 30mm
+  if (selected.type === "支台" && selected.material === "石膏") {
+    selected.formType = "ディスク";
+    selected.formSize = "30";
+    renderFormType();
+    return;
+  }
+  // Peek冠 or CAD/CAM冠 → ブロック
+  if (selected.material === "Peek冠" || selected.material === "CAD/CAM冠") {
+    selected.formType = "ブロック";
+    selected.formSize = "";
+    renderFormType();
+    return;
+  }
 }
 
 function selectFormType(ft) {
@@ -601,8 +619,9 @@ function renderHistory() {
       </div>
       ${dayRecs.map(r => {
         const fl = formLabel(r);
+        const tm = r.createdAt ? new Date(r.createdAt).toLocaleTimeString("ja-JP", {hour:"2-digit",minute:"2-digit"}) : "";
         return `<div class="day-record">
-          <span>${esc(r.type)} / ${esc(r.material)}${r.shade && r.shade !== "なし" ? ` / ${esc(r.shade)}` : ""}${r.machine ? ` [${esc(r.machine)}]` : ""}${fl ? ` [${esc(fl)}]` : ""}${r.memo ? ` (${esc(r.memo)})` : ""}</span>
+          <span>${tm ? `<span style="color:var(--color-text-tertiary,#bbb);font-size:12px;margin-right:6px">${tm}</span>` : ""}${esc(r.type)} / ${esc(r.material)}${r.shade && r.shade !== "なし" ? ` / ${esc(r.shade)}` : ""}${r.machine ? ` [${esc(r.machine)}]` : ""}${fl ? ` [${esc(fl)}]` : ""}${r.memo ? ` (${esc(r.memo)})` : ""}</span>
           <span class="day-record-qty">${formatQtyLabel(r)}</span>
         </div>`;
       }).join("")}
