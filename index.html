@@ -30,9 +30,11 @@
   .chip {
     padding: 10px 18px; border-radius: 10px; border: 2px solid #d0d0d0;
     background: #fff; color: #444; font-weight: 500; font-size: 15px;
-    cursor: pointer; transition: border-color 0.15s, background-color 0.15s, color 0.15s; min-height: 44px; white-space: nowrap;
+    cursor: pointer; transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+    min-height: 44px; white-space: nowrap;
   }
   .chip.selected { border-color: #1a6b4f; background: #e8f5ee; color: #1a6b4f; font-weight: 700; }
+  .chip.disabled { opacity: 0.3; pointer-events: none; }
   .date-input {
     font-size: 16px; padding: 10px 14px; border-radius: 10px;
     border: 2px solid #d0d0d0; width: 100%;
@@ -83,7 +85,7 @@
   .record-type { font-weight: 600; font-size: 15px; }
   .record-mat { color: #888; font-size: 13px; margin-left: 8px; }
   .record-shade { color: #b08d57; font-size: 13px; margin-left: 6px; }
-  .record-model { color: #2e86ab; font-size: 13px; margin-left: 6px; }
+  .record-machine { color: #2e86ab; font-size: 13px; margin-left: 6px; }
   .record-form { color: #7a6aad; font-size: 12px; margin-left: 6px; }
   .record-memo { color: #aaa; font-size: 12px; margin-left: 6px; }
   .record-qty { font-weight: 700; font-size: 16px; color: #1a6b4f; }
@@ -112,7 +114,7 @@
   .day-date { font-weight: 700; font-size: 15px; color: #333; }
   .day-total { font-size: 13px; color: #1a6b4f; font-weight: 600; }
   .day-record { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; color: #555; }
-  .day-record-qty { font-weight: 600; }
+  .day-record-qty { font-weight: 600; white-space: nowrap; }
   .day-group { margin-bottom: 16px; }
   .empty { text-align: center; padding: 60px 20px; color: #aaa; }
   .empty-icon { font-size: 40px; margin-bottom: 12px; }
@@ -134,7 +136,8 @@
   .form-radio {
     padding: 10px 18px; border-radius: 10px; border: 2px solid #d0d0d0;
     background: #fff; color: #444; font-weight: 500; font-size: 15px;
-    cursor: pointer; transition: border-color 0.15s, background-color 0.15s, color 0.15s; min-height: 44px; white-space: nowrap;
+    cursor: pointer; transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+    min-height: 44px; white-space: nowrap;
   }
   .form-radio.selected { border-color: #6a5acd; background: #f0ecff; color: #5a4abf; font-weight: 700; }
   .size-select {
@@ -168,7 +171,7 @@
   </div>
 
   <div class="field">
-    <label class="label">補綴物種類</label>
+    <label class="label">加工物</label>
     <div class="chips" id="chips-type"></div>
   </div>
 
@@ -183,17 +186,17 @@
   </div>
 
   <div class="field">
-    <label class="label">模型</label>
-    <div class="chips" id="chips-model"></div>
-  </div>
-
-  <div class="field">
     <label class="label">加工形態・サイズ</label>
     <div class="form-row" id="form-type-row"></div>
   </div>
 
   <div class="field">
-    <label class="label">歯数</label>
+    <label class="label">加工機</label>
+    <div class="chips" id="chips-machine"></div>
+  </div>
+
+  <div class="field">
+    <label class="label" id="qty-label">歯数</label>
     <div class="qty-row">
       <button class="qty-btn" onclick="changeQty(-1)">−</button>
       <span class="qty-val" id="qty-val">1</span>
@@ -235,17 +238,38 @@
 </div>
 
 <script>
-const TYPES = ["クラウン", "ブリッジ", "前装冠(Cr)", "前装冠(Br)", "インレー"];
+const TYPES = ["クラウン", "ブリッジ", "前装冠(Cr)", "前装冠(Br)", "インレー", "支台", "3D模型片顎", "3D模型全顎"];
 const MATERIALS = ["銀合金", "チタン", "CAD/CAM冠", "PMMA", "Peek冠", "石膏", "造形レジン", "ジルコニア", "e-max"];
-const MODELS = ["なし", "支台", "3D模型片顎", "3D模型全顎"];
 const SHADES = ["なし", "A1", "A2", "A3", "A3.5"];
 const FORM_TYPES = ["なし", "ディスク", "ブロック"];
 const DISC_SIZES = ["10", "12", "14", "16", "18", "20", "22", "25", "30"];
 const BLOCK_SIZES = ["12", "14", "14L"];
+const ALL_MACHINES = ["Wet1", "Wet2", "Dry1", "Dry2", "3Dプリンタ"];
 const STORAGE_KEY = "prosth-records";
 
+// Machine filtering rules
+const MATERIAL_MACHINES = {
+  "銀合金":    ["Wet1", "Wet2"],
+  "チタン":    ["Wet1", "Wet2"],
+  "e-max":     ["Wet1", "Wet2"],
+  "Peek冠":    ["Wet1", "Wet2"],
+  "CAD/CAM冠": ["Wet1", "Wet2", "Dry1", "Dry2"],
+  "PMMA":      ["Wet1", "Wet2", "Dry1", "Dry2"],
+  "ジルコニア": ["Dry1", "Dry2"],
+  "石膏":       ["Dry1", "Dry2"],
+  "造形レジン": ["3Dプリンタ"]
+};
+
+// Type overrides (these take priority over material)
+function getMachinesForSelection(type, material) {
+  if (type === "3D模型片顎" || type === "3D模型全顎") return ["3Dプリンタ"];
+  if (type === "支台") return ["Dry1", "Dry2", "3Dプリンタ"];
+  if (material && MATERIAL_MACHINES[material]) return MATERIAL_MACHINES[material];
+  return ALL_MACHINES;
+}
+
 let records = [];
-let selected = { type: "", material: "", shade: "なし", model: "なし", formType: "なし", formSize: "" };
+let selected = { type: "", material: "", shade: "なし", machine: "", formType: "なし", formSize: "" };
 let quantity = 1;
 let veneerQuantity = 1;
 let selectedMonth = "";
@@ -258,6 +282,12 @@ function monthStr(ds) { return ds.slice(0, 7); }
 function formatDate(ds) { const p = ds.split("-"); return `${+p[1]}/${+p[2]}`; }
 function formatMonth(ms) { const p = ms.split("-"); return `${p[0]}年${+p[1]}月`; }
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+
+function is3DType(t) { return t === "3D模型片顎" || t === "3D模型全顎"; }
+function qtyUnit(t) { return is3DType(t) ? "件" : "歯"; }
+function updateQtyLabel() {
+  document.getElementById("qty-label").textContent = is3DType(selected.type) ? "件数" : "歯数";
+}
 
 function loadRecords() {
   try { records = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
@@ -285,8 +315,38 @@ function renderChips(containerId, items, field) {
     btn.onclick = () => {
       selected[field] = item;
       renderChips(containerId, items, field);
-      if (field === "type") renderVeneerSection();
+      if (field === "type" || field === "material") {
+        renderMachineChips();
+        if (field === "type") {
+          renderVeneerSection();
+          updateQtyLabel();
+        }
+      }
     };
+    el.appendChild(btn);
+  });
+}
+
+function renderMachineChips() {
+  const allowed = getMachinesForSelection(selected.type, selected.material);
+  // If current selection is no longer valid, clear it
+  if (selected.machine && !allowed.includes(selected.machine)) {
+    selected.machine = "";
+  }
+  // Auto-select if only one option
+  if (allowed.length === 1) {
+    selected.machine = allowed[0];
+  }
+  const el = document.getElementById("chips-machine");
+  el.innerHTML = "";
+  ALL_MACHINES.forEach(m => {
+    const btn = document.createElement("button");
+    const isAllowed = allowed.includes(m);
+    btn.className = "chip" + (selected.machine === m ? " selected" : "") + (!isAllowed ? " disabled" : "");
+    btn.textContent = m;
+    if (isAllowed) {
+      btn.onclick = () => { selected.machine = m; renderMachineChips(); };
+    }
     el.appendChild(btn);
   });
 }
@@ -348,25 +408,29 @@ function renderVeneerSection() {
 }
 
 function formatQtyLabel(r) {
+  const u = qtyUnit(r.type);
   if (r.type === "前装冠(Br)" && (r.veneerQuantity || 0) > 0) {
-    return `×${r.quantity}（前装${r.veneerQuantity}）`;
+    return `×${r.quantity}${u}（前装${r.veneerQuantity}）`;
   }
-  return `×${r.quantity}`;
+  return `×${r.quantity}${u}`;
 }
 
-function totalsLabel(total, veneerTotal = 0) {
-  return veneerTotal > 0 ? `合計 ${total} 歯 / 前装 ${veneerTotal} 歯` : `合計 ${total} 歯`;
+function totalsLabel(toothCount, itemCount, veneerTotal) {
+  const parts = [];
+  if (toothCount > 0) parts.push(`${toothCount} 歯`);
+  if (itemCount > 0) parts.push(`${itemCount} 件`);
+  let s = "合計 " + parts.join(" / ");
+  if (veneerTotal > 0) s += ` / 前装 ${veneerTotal} 歯`;
+  return s;
 }
 
-function dayTotalLabel(total, veneerTotal = 0) {
-  return veneerTotal > 0 ? `${total}歯 / 前装${veneerTotal}歯` : `${total}歯`;
-}
-
-function showFeedback(msg, ok) {
-  const el = document.getElementById("feedback");
-  el.textContent = msg;
-  el.className = "feedback " + (ok ? "ok" : "err");
-  setTimeout(() => { el.className = "feedback hidden"; }, 1800);
+function dayTotalLabel(toothCount, itemCount, veneerTotal) {
+  const parts = [];
+  if (toothCount > 0) parts.push(`${toothCount}歯`);
+  if (itemCount > 0) parts.push(`${itemCount}件`);
+  let s = parts.join(" / ");
+  if (veneerTotal > 0) s += ` / 前装${veneerTotal}歯`;
+  return s;
 }
 
 function formLabel(r) {
@@ -376,9 +440,20 @@ function formLabel(r) {
   return s;
 }
 
+function showFeedback(msg, ok) {
+  const el = document.getElementById("feedback");
+  el.textContent = msg;
+  el.className = "feedback " + (ok ? "ok" : "err");
+  setTimeout(() => { el.className = "feedback hidden"; }, 1800);
+}
+
 function saveRecord() {
   if (!selected.type || !selected.material) {
-    showFeedback("種類と素材を選択してください", false);
+    showFeedback("加工物と素材を選択してください", false);
+    return;
+  }
+  if (!selected.machine) {
+    showFeedback("加工機を選択してください", false);
     return;
   }
   if (selected.type === "前装冠(Br)" && (veneerQuantity < 1 || veneerQuantity > quantity)) {
@@ -391,7 +466,7 @@ function saveRecord() {
     type: selected.type,
     material: selected.material,
     shade: selected.shade,
-    model: selected.model,
+    machine: selected.machine,
     formType: selected.formType,
     formSize: selected.formSize,
     quantity: quantity,
@@ -405,7 +480,7 @@ function saveRecord() {
   selected.type = "";
   selected.material = "";
   selected.shade = "なし";
-  selected.model = "なし";
+  selected.machine = "";
   selected.formType = "なし";
   selected.formSize = "";
   quantity = 1;
@@ -416,9 +491,10 @@ function saveRecord() {
   renderChips("chips-type", TYPES, "type");
   renderChips("chips-material", MATERIALS, "material");
   renderChips("chips-shade", SHADES, "shade");
-  renderChips("chips-model", MODELS, "model");
+  renderMachineChips();
   renderFormType();
   renderVeneerSection();
+  updateQtyLabel();
 
   showFeedback("登録しました", true);
   renderToday();
@@ -431,9 +507,10 @@ function renderToday() {
   if (todayRecs.length === 0) { section.className = "hidden"; return; }
   section.className = "";
 
-  const total = todayRecs.reduce((s, r) => s + r.quantity, 0);
+  const toothCount = todayRecs.filter(r => !is3DType(r.type)).reduce((s, r) => s + r.quantity, 0);
+  const itemCount = todayRecs.filter(r => is3DType(r.type)).reduce((s, r) => s + r.quantity, 0);
   const veneerTotal = todayRecs.reduce((s, r) => s + (r.veneerQuantity || 0), 0);
-  document.getElementById("today-total").textContent = totalsLabel(total, veneerTotal);
+  document.getElementById("today-total").textContent = totalsLabel(toothCount, itemCount, veneerTotal);
 
   const list = document.getElementById("today-list");
   list.innerHTML = todayRecs.map(r => {
@@ -443,7 +520,7 @@ function renderToday() {
         <span class="record-type">${esc(r.type)}</span>
         <span class="record-mat">${esc(r.material)}</span>
         ${r.shade && r.shade !== "なし" ? `<span class="record-shade">${esc(r.shade)}</span>` : ""}
-        ${r.model && r.model !== "なし" ? `<span class="record-model">${esc(r.model)}</span>` : ""}
+        ${r.machine ? `<span class="record-machine">${esc(r.machine)}</span>` : ""}
         ${fl ? `<span class="record-form">${esc(fl)}</span>` : ""}
         ${r.memo ? `<span class="record-memo">(${esc(r.memo)})</span>` : ""}
       </div>
@@ -478,20 +555,20 @@ function renderHistory() {
   const filtered = records.filter(r => monthStr(r.date) === selectedMonth);
   const dates = [...new Set(filtered.map(r => r.date))].sort().reverse();
 
-  const typeCounts = {}, matCounts = {};
-  let total = 0;
-  let veneerTotal = 0;
+  const typeCounts = {}, matCounts = {}, machineCounts = {};
+  let toothCount = 0, itemCount = 0, veneerTotal = 0;
   filtered.forEach(r => {
     typeCounts[r.type] = (typeCounts[r.type] || 0) + r.quantity;
     matCounts[r.material] = (matCounts[r.material] || 0) + r.quantity;
-    total += r.quantity;
+    if (r.machine) machineCounts[r.machine] = (machineCounts[r.machine] || 0) + r.quantity;
+    if (is3DType(r.type)) { itemCount += r.quantity; } else { toothCount += r.quantity; }
     veneerTotal += (r.veneerQuantity || 0);
   });
 
   const sortedEntries = (obj) => Object.entries(obj).sort((a,b) => b[1] - a[1]);
 
   let html = `<div class="summary-box">
-    <div class="summary-title">月間サマリー（${totalsLabel(total, veneerTotal)}）</div>
+    <div class="summary-title">月間サマリー（${totalsLabel(toothCount, itemCount, veneerTotal)}）</div>
     <div class="summary-cols">
       <div>
         <div class="summary-col-title">種類別</div>
@@ -500,6 +577,10 @@ function renderHistory() {
       <div>
         <div class="summary-col-title">素材別</div>
         ${sortedEntries(matCounts).map(([k,v]) => `<div class="summary-item"><span class="summary-item-name">${esc(k)}</span><span class="summary-item-count">${v}</span></div>`).join("")}
+      </div>
+      <div>
+        <div class="summary-col-title">加工機別</div>
+        ${sortedEntries(machineCounts).map(([k,v]) => `<div class="summary-item"><span class="summary-item-name">${esc(k)}</span><span class="summary-item-count">${v}</span></div>`).join("")}
       </div>
       ${veneerTotal > 0 ? `<div>
         <div class="summary-col-title">前装冠(Br) 内訳</div>
@@ -510,17 +591,18 @@ function renderHistory() {
 
   dates.forEach(d => {
     const dayRecs = filtered.filter(r => r.date === d);
-    const dayTotal = dayRecs.reduce((s,r) => s + r.quantity, 0);
+    const dayTooth = dayRecs.filter(r => !is3DType(r.type)).reduce((s,r) => s + r.quantity, 0);
+    const dayItem = dayRecs.filter(r => is3DType(r.type)).reduce((s,r) => s + r.quantity, 0);
     const dayVeneerTotal = dayRecs.reduce((s,r) => s + (r.veneerQuantity || 0), 0);
     html += `<div class="day-group">
       <div class="day-header">
         <span class="day-date">${formatDate(d)}</span>
-        <span class="day-total">${dayTotalLabel(dayTotal, dayVeneerTotal)}</span>
+        <span class="day-total">${dayTotalLabel(dayTooth, dayItem, dayVeneerTotal)}</span>
       </div>
       ${dayRecs.map(r => {
         const fl = formLabel(r);
         return `<div class="day-record">
-          <span>${esc(r.type)} / ${esc(r.material)}${r.shade && r.shade !== "なし" ? ` / ${esc(r.shade)}` : ""}${r.model && r.model !== "なし" ? ` / ${esc(r.model)}` : ""}${fl ? ` [${esc(fl)}]` : ""}${r.memo ? ` (${esc(r.memo)})` : ""}</span>
+          <span>${esc(r.type)} / ${esc(r.material)}${r.shade && r.shade !== "なし" ? ` / ${esc(r.shade)}` : ""}${r.machine ? ` [${esc(r.machine)}]` : ""}${fl ? ` [${esc(fl)}]` : ""}${r.memo ? ` (${esc(r.memo)})` : ""}</span>
           <span class="day-record-qty">${formatQtyLabel(r)}</span>
         </div>`;
       }).join("")}
@@ -533,9 +615,9 @@ function renderHistory() {
 function selectMonth(m) { selectedMonth = m; renderHistory(); }
 
 function exportCSV() {
-  const header = "加工日,補綴物種類,使用素材,シェード,模型,加工形態,サイズ,歯数,前装冠数,メモ,登録日時\n";
+  const header = "加工日,加工物,使用素材,シェード,加工機,加工形態,サイズ,数量,前装冠数,メモ,登録日時\n";
   const rows = [...records].sort((a,b) => a.date.localeCompare(b.date))
-    .map(r => `${r.date},${r.type},${r.material},${r.shade||"なし"},${r.model||"なし"},${r.formType||"なし"},${r.formSize||""},${r.quantity},${r.veneerQuantity||0},"${(r.memo||"").replace(/"/g,'""')}",${r.createdAt}`)
+    .map(r => `${r.date},${r.type},${r.material},${r.shade||"なし"},${r.machine||""},${r.formType||"なし"},${r.formSize||""},${r.quantity},${r.veneerQuantity||0},"${(r.memo||"").replace(/"/g,'""')}",${r.createdAt}`)
     .join("\n");
   const blob = new Blob(["\uFEFF" + header + rows], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
@@ -554,9 +636,10 @@ document.getElementById("inp-date").value = todayStr();
 renderChips("chips-type", TYPES, "type");
 renderChips("chips-material", MATERIALS, "material");
 renderChips("chips-shade", SHADES, "shade");
-renderChips("chips-model", MODELS, "model");
+renderMachineChips();
 renderFormType();
 renderVeneerSection();
+updateQtyLabel();
 renderToday();
 if (window.navigator.standalone) document.getElementById("install-hint").className = "hidden";
 </script>
