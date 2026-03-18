@@ -263,7 +263,11 @@ const MATERIAL_MACHINES = {
 // Type overrides (these take priority over material)
 function getMachinesForSelection(type, material) {
   if (type === "3D模型片顎" || type === "3D模型全顎") return ["3Dプリンタ"];
-  if (type === "支台") return ["Dry1", "Dry2", "3Dプリンタ"];
+  if (type === "支台") {
+    if (material === "造形レジン") return ["3Dプリンタ"];
+    if (material === "石膏") return ["Dry1", "Dry2"];
+    return ["Dry1", "Dry2", "3Dプリンタ"];
+  }
   if (material && MATERIAL_MACHINES[material]) return MATERIAL_MACHINES[material];
   return ALL_MACHINES;
 }
