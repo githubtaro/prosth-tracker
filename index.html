@@ -144,6 +144,36 @@
     font-size: 16px; padding: 10px 14px; border-radius: 10px;
     border: 2px solid #d0d0d0; background: #fff; min-height: 44px;
   }
+  .modal-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.4); z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .modal-box {
+    background: #fff; border-radius: 16px; padding: 24px;
+    max-width: 400px; width: 100%; max-height: 80vh; overflow-y: auto;
+  }
+  .modal-title {
+    font-size: 17px; font-weight: 700; margin-bottom: 16px; color: #1a1a1a;
+  }
+  .modal-row {
+    display: flex; justify-content: space-between; padding: 8px 0;
+    border-bottom: 1px solid #f0f0f0; font-size: 14px;
+  }
+  .modal-row:last-of-type { border-bottom: none; }
+  .modal-label { color: #888; }
+  .modal-value { color: #1a1a1a; font-weight: 600; text-align: right; }
+  .modal-warn { color: #c0392b; font-weight: 600; }
+  .modal-buttons {
+    display: flex; gap: 12px; margin-top: 20px;
+  }
+  .modal-btn {
+    flex: 1; padding: 14px; border-radius: 12px; font-size: 16px;
+    font-weight: 700; cursor: pointer; min-height: 48px; border: none;
+  }
+  .modal-btn-cancel { background: #f0f0f0; color: #666; }
+  .modal-btn-ok { background: #1a6b4f; color: #fff; }
 </style>
 </head>
 <body>
@@ -235,6 +265,17 @@
   <div class="month-chips" id="month-chips"></div>
   <div id="history-content"></div>
   <button class="btn-export" onclick="exportCSV()">CSVエクスポート</button>
+</div>
+
+<div class="modal-overlay hidden" id="confirm-modal" onclick="closeModal(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-title">登録内容の確認</div>
+    <div id="confirm-body"></div>
+    <div class="modal-buttons">
+      <button class="modal-btn modal-btn-cancel" onclick="hideModal()">戻る</button>
+      <button class="modal-btn modal-btn-ok" onclick="commitRecord()">登録</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -391,6 +432,13 @@ function applyAutoSettings() {
     renderFormType();
     return;
   }
+  // チタン, 銀合金, PMMA, ジルコニア → ディスク
+  if (["チタン", "銀合金", "PMMA", "ジルコニア"].includes(selected.material)) {
+    selected.formType = "ディスク";
+    selected.formSize = "";
+    renderFormType();
+    return;
+  }
 }
 
 function selectFormType(ft) {
@@ -482,6 +530,45 @@ function saveRecord() {
     showFeedback("前装冠数は1以上かつ総歯数以下にしてください", false);
     return;
   }
+  // 確認モーダルを表示
+  const fl = formLabel({ formType: selected.formType, formSize: selected.formSize });
+  const formRequiredMaterials = ["チタン", "銀合金", "PMMA", "ジルコニア", "Peek冠", "e-max", "CAD/CAM冠", "石膏"];
+  const formWarn = selected.formType === "なし" && formRequiredMaterials.includes(selected.material);
+
+  let rows = [
+    ["加工日", document.getElementById("inp-date").value],
+    ["加工物", selected.type],
+    ["使用素材", selected.material],
+    ["シェード", selected.shade],
+    ["加工機", selected.machine],
+    ["加工形態", fl || "なし", formWarn],
+    [is3DType(selected.type) ? "件数" : "歯数", quantity]
+  ];
+  if (selected.type === "前装冠(Br)") {
+    rows.push(["前装冠数", veneerQuantity]);
+  }
+  const memo = document.getElementById("inp-memo").value.trim();
+  if (memo) rows.push(["メモ", memo]);
+
+  let html = rows.map(r => {
+    const warn = r[2] ? ' modal-warn' : '';
+    const warnNote = r[2] ? '<div style="font-size:12px;color:#c0392b;margin-top:2px">⚠ 加工形態が未選択です</div>' : '';
+    return `<div class="modal-row"><span class="modal-label">${esc(r[0])}</span><span class="modal-value${warn}">${esc(String(r[1]))}${warnNote}</span></div>`;
+  }).join("");
+  document.getElementById("confirm-body").innerHTML = html;
+  document.getElementById("confirm-modal").className = "modal-overlay";
+}
+
+function hideModal() {
+  document.getElementById("confirm-modal").className = "modal-overlay hidden";
+}
+
+function closeModal(e) {
+  if (e.target === document.getElementById("confirm-modal")) hideModal();
+}
+
+function commitRecord() {
+  hideModal();
   const rec = {
     id: genId(),
     date: document.getElementById("inp-date").value,
