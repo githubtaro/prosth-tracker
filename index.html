@@ -265,6 +265,9 @@
   <div class="month-chips" id="month-chips"></div>
   <div id="history-content"></div>
   <button class="btn-export" onclick="exportCSV()">CSVエクスポート</button>
+  <button class="btn-export" style="border-color:#2e86ab;color:#2e86ab;margin-top:8px" onclick="document.getElementById('csv-import').click()">CSVインポート</button>
+  <input type="file" id="csv-import" accept=".csv" style="display:none" onchange="importCSV(this)">
+  <div class="feedback hidden" id="import-feedback"></div>
 </div>
 
 <div class="modal-overlay hidden" id="confirm-modal" onclick="closeModal(event)">
@@ -744,6 +747,84 @@ function exportCSV() {
   a.download = `加工記録_${todayStr()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function importCSV(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      let text = e.target.result;
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+      const lines = text.split("\n").filter(l => l.trim());
+      if (lines.length < 2) {
+        showImportFeedback("データがありません", false);
+        return;
+      }
+      const header = lines[0];
+      const existingIds = new Set(records.map(r => r.createdAt));
+      let imported = 0, skipped = 0;
+      for (let i = 1; i < lines.length; i++) {
+        const cols = parseCSVLine(lines[i]);
+        if (cols.length < 11) { skipped++; continue; }
+        const createdAt = cols[10].trim();
+        if (existingIds.has(createdAt)) { skipped++; continue; }
+        const rec = {
+          id: genId(),
+          date: cols[0].trim(),
+          type: cols[1].trim(),
+          material: cols[2].trim(),
+          shade: cols[3].trim() || "なし",
+          machine: cols[4].trim() || "",
+          formType: cols[5].trim() || "なし",
+          formSize: cols[6].trim() || "",
+          quantity: parseInt(cols[7]) || 1,
+          veneerQuantity: parseInt(cols[8]) || 0,
+          memo: cols[9].trim(),
+          createdAt: createdAt
+        };
+        if (!rec.date || !rec.type || !rec.material) { skipped++; continue; }
+        records.push(rec);
+        existingIds.add(createdAt);
+        imported++;
+      }
+      persistRecords();
+      renderHistory();
+      renderToday();
+      showImportFeedback(`${imported}件インポート${skipped > 0 ? `（${skipped}件スキップ）` : ""}`, true);
+    } catch(err) {
+      showImportFeedback("読み込みエラー: " + err.message, false);
+    }
+    input.value = "";
+  };
+  reader.readAsText(file, "UTF-8");
+}
+
+function parseCSVLine(line) {
+  const cols = [];
+  let cur = "", inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQuote) {
+      if (c === '"' && line[i+1] === '"') { cur += '"'; i++; }
+      else if (c === '"') { inQuote = false; }
+      else { cur += c; }
+    } else {
+      if (c === '"') { inQuote = true; }
+      else if (c === ',') { cols.push(cur); cur = ""; }
+      else { cur += c; }
+    }
+  }
+  cols.push(cur);
+  return cols;
+}
+
+function showImportFeedback(msg, ok) {
+  const el = document.getElementById("import-feedback");
+  el.textContent = msg;
+  el.className = "feedback " + (ok ? "ok" : "err");
+  setTimeout(() => { el.className = "feedback hidden"; }, 3000);
 }
 
 function closeHint() { document.getElementById("install-hint").className = "hidden"; }
