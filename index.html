@@ -283,8 +283,10 @@
 
 <script>
 const TYPES = ["クラウン", "ブリッジ", "前装冠(Cr)", "前装冠(Br)", "インレー", "支台", "3D模型片顎", "3D模型全顎"];
-const MATERIALS = ["銀合金", "チタン", "CAD/CAM冠", "PMMA", "Peek冠", "石膏", "造形レジン", "ジルコニア", "e-max"];
-const SHADES = ["なし", "A1", "A2", "A3", "A3.5"];
+const MATERIALS = ["銀合金", "チタン", "CAD/CAM冠", "PMMA", "Peek冠", "石膏", "造形レジン", "ジルコニア", "e-max", "セラスマート300"];
+const SHADES = ["なし", "A1", "A2", "A3", "A3.5", "アイボリー", "ホワイト"];
+const PEEK_SHADES = ["なし", "アイボリー", "ホワイト"];
+const NON_PEEK_SHADES = ["なし", "A1", "A2", "A3", "A3.5"];
 const FORM_TYPES = ["なし", "ディスク", "ブロック"];
 const DISC_SIZES = ["10", "12", "14", "16", "18", "20", "22", "25", "30"];
 const BLOCK_SIZES = ["12", "14", "14L"];
@@ -301,7 +303,8 @@ const MATERIAL_MACHINES = {
   "PMMA":      ["Wet1", "Wet2", "Dry1", "Dry2"],
   "ジルコニア": ["Dry1", "Dry2"],
   "石膏":       ["Dry1", "Dry2"],
-  "造形レジン": ["3Dプリンタ"]
+  "造形レジン": ["3Dプリンタ"],
+  "セラスマート300": ["Wet1", "Wet2", "Dry1", "Dry2"]
 };
 
 // Type overrides (these take priority over material)
@@ -366,6 +369,7 @@ function renderChips(containerId, items, field) {
       if (field === "type" || field === "material") {
         renderMachineChips();
         applyAutoSettings();
+        if (field === "material") renderShadeChips();
         if (field === "type") {
           renderVeneerSection();
           updateQtyLabel();
@@ -400,6 +404,25 @@ function renderMachineChips() {
   });
 }
 
+function renderShadeChips() {
+  const allowed = selected.material === "Peek冠" ? PEEK_SHADES : NON_PEEK_SHADES;
+  if (selected.shade && !allowed.includes(selected.shade)) {
+    selected.shade = "なし";
+  }
+  const el = document.getElementById("chips-shade");
+  el.innerHTML = "";
+  SHADES.forEach(s => {
+    const btn = document.createElement("button");
+    const isAllowed = allowed.includes(s);
+    btn.className = "chip" + (selected.shade === s ? " selected" : "") + (!isAllowed ? " disabled" : "");
+    btn.textContent = s;
+    if (isAllowed) {
+      btn.onclick = () => { selected.shade = s; renderShadeChips(); };
+    }
+    el.appendChild(btn);
+  });
+}
+
 function renderFormType() {
   const row = document.getElementById("form-type-row");
   let html = "";
@@ -428,8 +451,8 @@ function applyAutoSettings() {
     renderFormType();
     return;
   }
-  // Peek冠 or e-max → ブロック
-  if (selected.material === "Peek冠" || selected.material === "e-max") {
+  // Peek冠 or e-max or セラスマート300 → ブロック
+  if (selected.material === "Peek冠" || selected.material === "e-max" || selected.material === "セラスマート300") {
     selected.formType = "ブロック";
     selected.formSize = "";
     renderFormType();
@@ -535,7 +558,7 @@ function saveRecord() {
   }
   // 確認モーダルを表示
   const fl = formLabel({ formType: selected.formType, formSize: selected.formSize });
-  const formRequiredMaterials = ["チタン", "銀合金", "PMMA", "ジルコニア", "Peek冠", "e-max", "CAD/CAM冠", "石膏"];
+  const formRequiredMaterials = ["チタン", "銀合金", "PMMA", "ジルコニア", "Peek冠", "e-max", "CAD/CAM冠", "石膏", "セラスマート300"];
   const formWarn = selected.formType === "なし" && formRequiredMaterials.includes(selected.material);
 
   let rows = [
@@ -602,7 +625,7 @@ function commitRecord() {
   document.getElementById("inp-memo").value = "";
   renderChips("chips-type", TYPES, "type");
   renderChips("chips-material", MATERIALS, "material");
-  renderChips("chips-shade", SHADES, "shade");
+  renderShadeChips();
   renderMachineChips();
   renderFormType();
   renderVeneerSection();
@@ -834,7 +857,7 @@ loadRecords();
 document.getElementById("inp-date").value = todayStr();
 renderChips("chips-type", TYPES, "type");
 renderChips("chips-material", MATERIALS, "material");
-renderChips("chips-shade", SHADES, "shade");
+renderShadeChips();
 renderMachineChips();
 renderFormType();
 renderVeneerSection();
