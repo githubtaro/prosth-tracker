@@ -20,7 +20,7 @@
   .tabs { display: flex; border-bottom: 1px solid #eee; }
   .tab {
     flex: 1; padding: 14px 0; border: none; border-bottom: 3px solid transparent;
-    background: transparent; color: #999; font-weight: 500; font-size: 16px; cursor: pointer;
+    background: transparent; color: #999; font-weight: 500; font-size: 14px; cursor: pointer;
   }
   .tab.active { color: #1a6b4f; border-bottom-color: #1a6b4f; font-weight: 700; }
   .content { padding: 20px; }
@@ -184,6 +184,7 @@
   <div class="tabs">
     <button class="tab active" id="tab-entry" onclick="switchTab('entry')">入力</button>
     <button class="tab" id="tab-history" onclick="switchTab('history')">履歴</button>
+    <button class="tab" id="tab-barlog" onclick="switchTab('barlog')">設備ログ</button>
   </div>
 </div>
 
@@ -270,6 +271,45 @@
   <div class="feedback hidden" id="import-feedback"></div>
 </div>
 
+<div class="content hidden" id="page-barlog">
+  <div class="field">
+    <label class="label">交換日</label>
+    <input type="date" class="date-input" id="bar-date">
+  </div>
+
+  <div class="field">
+    <label class="label">加工機</label>
+    <div class="chips" id="chips-bar-machine"></div>
+  </div>
+
+  <div class="field">
+    <label class="label">バー種類</label>
+    <select class="size-select" style="width:100%" id="sel-bar-type">
+      <option value="">選択してください</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label class="label">交換理由</label>
+    <div class="chips" id="chips-bar-reason"></div>
+  </div>
+
+  <div class="field">
+    <label class="label">メモ</label>
+    <input type="text" class="memo-input" id="bar-memo" placeholder="例: 備考">
+  </div>
+
+  <button class="btn-save" onclick="saveBarLog()">登録</button>
+  <div class="feedback hidden" id="bar-feedback"></div>
+
+  <div style="margin-top:28px">
+    <div style="font-size:14px;color:#888;margin-bottom:12px">交換履歴</div>
+    <div id="bar-log-list"></div>
+  </div>
+
+  <button class="btn-export" style="margin-top:16px" onclick="exportBarCSV()">バーログCSVエクスポート</button>
+</div>
+
 <div class="modal-overlay hidden" id="confirm-modal" onclick="closeModal(event)">
   <div class="modal-box" onclick="event.stopPropagation()">
     <div class="modal-title">登録内容の確認</div>
@@ -349,11 +389,12 @@ function persistRecords() {
 }
 
 function switchTab(tab) {
-  document.getElementById("tab-entry").className = tab === "entry" ? "tab active" : "tab";
-  document.getElementById("tab-history").className = tab === "history" ? "tab active" : "tab";
-  document.getElementById("page-entry").className = tab === "entry" ? "content" : "content hidden";
-  document.getElementById("page-history").className = tab === "history" ? "content" : "content hidden";
+  ["entry", "history", "barlog"].forEach(t => {
+    document.getElementById("tab-" + t).className = tab === t ? "tab active" : "tab";
+    document.getElementById("page-" + t).className = tab === t ? "content" : "content hidden";
+  });
   if (tab === "history") renderHistory();
+  if (tab === "barlog") renderBarLog();
 }
 
 function renderChips(containerId, items, field) {
@@ -850,11 +891,160 @@ function showImportFeedback(msg, ok) {
   setTimeout(() => { el.className = "feedback hidden"; }, 3000);
 }
 
+// ===== 設備ログ（バー交換記録） =====
+const BAR_TYPES = [
+  { code: "CSC-526019 2506", name: "PMMA/WAX 2.5mm", series: "PMMA/WAX" },
+  { code: "CSC-526019 1006", name: "PMMA/WAX 1.0mm", series: "PMMA/WAX" },
+  { code: "CSC-526012 0606", name: "PMMA/WAX 0.6mm", series: "PMMA/WAX" },
+  { code: "CSC-526013 2506", name: "HC 2.5mm", series: "HC" },
+  { code: "CSC-526013 1006", name: "HC 1.0mm", series: "HC" },
+  { code: "CSC-526019 0606", name: "HC 0.6mm", series: "HC" },
+  { code: "CSC-CD-03-0019", name: "Metal 3.0mm", series: "Metal" },
+  { code: "CSC-CD-03-0002", name: "Metal 2.0mm", series: "Metal" },
+  { code: "CSC-CD-03-0003", name: "Metal 1.0mm", series: "Metal" }
+];
+const BAR_REASONS = ["摩耗", "破損", "定期"];
+const BAR_MACHINES = ["Wet1", "Wet2", "Dry1", "Dry2"];
+const BAR_STORAGE_KEY = "prosth-bar-logs";
+
+let barLogs = [];
+let barSelected = { machine: "", reason: "" };
+
+function loadBarLogs() {
+  try { barLogs = JSON.parse(localStorage.getItem(BAR_STORAGE_KEY) || "[]"); }
+  catch { barLogs = []; }
+}
+function persistBarLogs() {
+  localStorage.setItem(BAR_STORAGE_KEY, JSON.stringify(barLogs));
+}
+
+function renderBarMachineChips() {
+  const el = document.getElementById("chips-bar-machine");
+  el.innerHTML = "";
+  BAR_MACHINES.forEach(m => {
+    const btn = document.createElement("button");
+    btn.className = "chip" + (barSelected.machine === m ? " selected" : "");
+    btn.textContent = m;
+    btn.onclick = () => { barSelected.machine = m; renderBarMachineChips(); };
+    el.appendChild(btn);
+  });
+}
+
+function renderBarReasonChips() {
+  const el = document.getElementById("chips-bar-reason");
+  el.innerHTML = "";
+  BAR_REASONS.forEach(r => {
+    const btn = document.createElement("button");
+    btn.className = "chip" + (barSelected.reason === r ? " selected" : "");
+    btn.textContent = r;
+    btn.onclick = () => { barSelected.reason = r; renderBarReasonChips(); };
+    el.appendChild(btn);
+  });
+}
+
+function renderBarTypeSelect() {
+  const sel = document.getElementById("sel-bar-type");
+  sel.innerHTML = '<option value="">選択してください</option>';
+  BAR_TYPES.forEach(b => {
+    const opt = document.createElement("option");
+    opt.value = b.code;
+    opt.textContent = b.name + "  [" + b.code + "]";
+    sel.appendChild(opt);
+  });
+}
+
+function showBarFeedback(msg, ok) {
+  const el = document.getElementById("bar-feedback");
+  el.textContent = msg;
+  el.className = "feedback " + (ok ? "ok" : "err");
+  setTimeout(() => { el.className = "feedback hidden"; }, 1800);
+}
+
+function saveBarLog() {
+  const barCode = document.getElementById("sel-bar-type").value;
+  if (!barSelected.machine) { showBarFeedback("加工機を選択してください", false); return; }
+  if (!barCode) { showBarFeedback("バー種類を選択してください", false); return; }
+  if (!barSelected.reason) { showBarFeedback("交換理由を選択してください", false); return; }
+
+  const bar = BAR_TYPES.find(b => b.code === barCode);
+  const log = {
+    id: genId(),
+    date: document.getElementById("bar-date").value,
+    machine: barSelected.machine,
+    barCode: bar.code,
+    barName: bar.name,
+    barSeries: bar.series,
+    reason: barSelected.reason,
+    memo: document.getElementById("bar-memo").value.trim(),
+    createdAt: new Date().toISOString()
+  };
+  barLogs.push(log);
+  persistBarLogs();
+
+  barSelected.machine = "";
+  barSelected.reason = "";
+  document.getElementById("sel-bar-type").value = "";
+  document.getElementById("bar-memo").value = "";
+  renderBarMachineChips();
+  renderBarReasonChips();
+
+  showBarFeedback("登録しました", true);
+  renderBarLog();
+}
+
+function renderBarLog() {
+  const list = document.getElementById("bar-log-list");
+  if (barLogs.length === 0) {
+    list.innerHTML = '<div class="empty"><div class="empty-icon">🔧</div><div class="empty-text">まだ交換記録がありません</div></div>';
+    return;
+  }
+  const sorted = [...barLogs].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  list.innerHTML = sorted.map(l => {
+    const tm = l.createdAt ? new Date(l.createdAt).toLocaleTimeString("ja-JP", {hour:"2-digit",minute:"2-digit"}) : "";
+    const dateStr = l.date ? formatDate(l.date) : "";
+    return `<div class="record-row">
+      <div>
+        <span style="font-size:12px;color:#bbb;margin-right:6px">${dateStr} ${tm}</span>
+        <span class="record-type">${esc(l.barName)}</span>
+        <span class="record-machine">${esc(l.machine)}</span>
+        <span style="color:#c0392b;font-size:12px;margin-left:6px">${esc(l.reason)}</span>
+        ${l.memo ? `<span class="record-memo">(${esc(l.memo)})</span>` : ""}
+      </div>
+      <div>
+        <button onclick="deleteBarLog('${l.id}')" style="background:none;border:none;color:#ccc;font-size:16px;cursor:pointer;padding:2px 6px">✕</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function deleteBarLog(id) {
+  if (!confirm("この交換記録を削除しますか？")) return;
+  barLogs = barLogs.filter(l => l.id !== id);
+  persistBarLogs();
+  renderBarLog();
+}
+
+function exportBarCSV() {
+  const header = "交換日,加工機,バー種類,商品コード,シリーズ,交換理由,メモ,登録日時\n";
+  const rows = [...barLogs].sort((a,b) => a.date.localeCompare(b.date))
+    .map(l => `${l.date},${l.machine},${l.barName},${l.barCode},${l.barSeries},${l.reason},"${(l.memo||"").replace(/"/g,'""')}",${l.createdAt}`)
+    .join("\n");
+  const blob = new Blob(["\uFEFF" + header + rows], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `バー交換記録_${todayStr()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function closeHint() { document.getElementById("install-hint").className = "hidden"; }
 function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
 
 loadRecords();
+loadBarLogs();
 document.getElementById("inp-date").value = todayStr();
+document.getElementById("bar-date").value = todayStr();
 renderChips("chips-type", TYPES, "type");
 renderChips("chips-material", MATERIALS, "material");
 renderShadeChips();
@@ -863,6 +1053,9 @@ renderFormType();
 renderVeneerSection();
 updateQtyLabel();
 renderToday();
+renderBarMachineChips();
+renderBarReasonChips();
+renderBarTypeSelect();
 if (window.navigator.standalone) document.getElementById("install-hint").className = "hidden";
 </script>
 </body>
