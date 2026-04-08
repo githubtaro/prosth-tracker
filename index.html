@@ -328,13 +328,14 @@
 
 <script>
 const TYPES = ["クラウン", "ブリッジ", "前装冠(Cr)", "前装冠(Br)", "インレー", "支台", "3D模型片顎", "3D模型全顎"];
-const MATERIALS = ["銀合金", "チタン", "CAD/CAM冠", "PMMA", "Peek冠", "石膏", "造形レジン", "ジルコニア", "e-max", "セラスマート"];
+const MATERIALS = ["銀合金", "チタン", "CAD/CAM冠", "PMMA", "Peek冠", "セラスマート", "石膏", "造形レジン", "ジルコニア", "e-max", "WAX"];
 const PRODUCT_NAMES = {
   "CAD/CAM冠": ["刀アベンシアP", "刀アベンシアN", "Mazic Duro"],
   "セラスマート": ["Prime", "300", "Layer"]
 };
 const SHADES = ["なし", "A1", "A2", "A3", "A3.5", "アイボリー", "ホワイト"];
 const PEEK_SHADES = ["なし", "アイボリー", "ホワイト"];
+const WAX_SHADES = ["なし"];
 const NON_PEEK_SHADES = ["なし", "A1", "A2", "A3", "A3.5"];
 const FORM_TYPES = ["なし", "ディスク", "ブロック"];
 const DISC_SIZES = ["10", "12", "14", "16", "18", "20", "22", "25", "30"];
@@ -350,6 +351,7 @@ const MATERIAL_MACHINES = {
   "Peek冠":    ["Wet1", "Wet2"],
   "CAD/CAM冠": ["Wet1", "Wet2", "Dry1", "Dry2"],
   "PMMA":      ["Wet1", "Wet2", "Dry1", "Dry2"],
+  "WAX":       ["Wet1", "Wet2", "Dry1", "Dry2"],
   "ジルコニア": ["Dry1", "Dry2"],
   "石膏":       ["Dry1", "Dry2"],
   "造形レジン": ["3Dプリンタ"],
@@ -458,7 +460,7 @@ function renderMachineChips() {
 }
 
 function renderShadeChips() {
-  const allowed = selected.material === "Peek冠" ? PEEK_SHADES : NON_PEEK_SHADES;
+  const allowed = selected.material === "Peek冠" ? PEEK_SHADES : selected.material === "WAX" ? WAX_SHADES : NON_PEEK_SHADES;
   if (selected.shade && !allowed.includes(selected.shade)) {
     selected.shade = "なし";
   }
@@ -494,7 +496,7 @@ function renderProductChips() {
     const btn = document.createElement("button");
     btn.className = "chip" + (selected.productName === p ? " selected" : "");
     btn.textContent = p;
-    btn.onclick = () => { selected.productName = p; renderProductChips(); };
+    btn.onclick = () => { selected.productName = p; renderProductChips(); applyAutoSettings(); };
     el.appendChild(btn);
   });
 }
@@ -520,6 +522,20 @@ function renderFormType() {
 }
 
 function applyAutoSettings() {
+  // 刀アベンシアP → ブロック 14
+  if (selected.productName === "刀アベンシアP") {
+    selected.formType = "ブロック";
+    selected.formSize = "14";
+    renderFormType();
+    return;
+  }
+  // 刀アベンシアN → ブロック 14L
+  if (selected.productName === "刀アベンシアN") {
+    selected.formType = "ブロック";
+    selected.formSize = "14L";
+    renderFormType();
+    return;
+  }
   // 支台 + 石膏 → ディスク 30mm
   if (selected.type === "支台" && selected.material === "石膏") {
     selected.formType = "ディスク";
@@ -527,8 +543,22 @@ function applyAutoSettings() {
     renderFormType();
     return;
   }
-  // Peek冠 or e-max or セラスマート → ブロック
-  if (selected.material === "Peek冠" || selected.material === "e-max" || selected.material === "セラスマート") {
+  // WAX → ディスク
+  if (selected.material === "WAX") {
+    selected.formType = "ディスク";
+    selected.formSize = "";
+    renderFormType();
+    return;
+  }
+  // セラスマート → ブロック 14
+  if (selected.material === "セラスマート") {
+    selected.formType = "ブロック";
+    selected.formSize = "14";
+    renderFormType();
+    return;
+  }
+  // Peek冠 or e-max → ブロック
+  if (selected.material === "Peek冠" || selected.material === "e-max") {
     selected.formType = "ブロック";
     selected.formSize = "";
     renderFormType();
@@ -638,7 +668,7 @@ function saveRecord() {
   }
   // 確認モーダルを表示
   const fl = formLabel({ formType: selected.formType, formSize: selected.formSize });
-  const formRequiredMaterials = ["チタン", "銀合金", "PMMA", "ジルコニア", "Peek冠", "e-max", "CAD/CAM冠", "石膏", "セラスマート"];
+  const formRequiredMaterials = ["チタン", "銀合金", "PMMA", "WAX", "ジルコニア", "Peek冠", "e-max", "CAD/CAM冠", "石膏", "セラスマート"];
   const formWarn = selected.formType === "なし" && formRequiredMaterials.includes(selected.material);
   const matDisplay = selected.productName ? selected.material + " / " + selected.productName : selected.material;
 
@@ -966,9 +996,15 @@ const BAR_TYPES = [
   { code: "CSC-526013 2506", name: "HC 2.5mm", series: "HC", lifetime: "25:00:00" },
   { code: "CSC-526013 1006", name: "HC 1.0mm", series: "HC", lifetime: "25:00:00" },
   { code: "CSC-526019 0606", name: "HC 0.6mm", series: "HC", lifetime: "06:00:00" },
-  { code: "CSC-CD-03-0019", name: "Metal 3.0mm", series: "Metal", lifetime: "06:00:00" },
-  { code: "CSC-CD-03-0002", name: "Metal 2.0mm", series: "Metal", lifetime: "06:00:00" },
-  { code: "CSC-CD-03-0003", name: "Metal 1.0mm", series: "Metal", lifetime: "06:00:00" },
+  { code: "CSC-CD-03-0019", name: "Metal(A) 3.0mm", series: "Metal", lifetime: "06:00:00" },
+  { code: "CSC-CD-03-0002", name: "Metal(A) 2.0mm", series: "Metal", lifetime: "06:00:00" },
+  { code: "CSC-CD-03-0003", name: "Metal(A) 1.0mm", series: "Metal", lifetime: "06:00:00" },
+  { code: "CSC-CD-03-0019", name: "Metal(B) 3.0mm", series: "Metal", lifetime: "06:00:00" },
+  { code: "CSC-CD-03-0002", name: "Metal(B) 2.0mm", series: "Metal", lifetime: "06:00:00" },
+  { code: "CSC-CD-03-0003", name: "Metal(B) 1.0mm", series: "Metal", lifetime: "06:00:00" },
+  { code: "CSC-CD-03-0019", name: "Metal(C) 3.0mm", series: "Metal", lifetime: "06:00:00" },
+  { code: "CSC-CD-03-0002", name: "Metal(C) 2.0mm", series: "Metal", lifetime: "06:00:00" },
+  { code: "CSC-CD-03-0003", name: "Metal(C) 1.0mm", series: "Metal", lifetime: "06:00:00" },
   { code: "Zr_PMMA_WAX_1.5mm", name: "Zr/PMMA/WAX 1.5mm", series: "Zr/PMMA/WAX", lifetime: "06:00:00" },
   { code: "Zr_2.5mm", name: "Zr 2.5mm", series: "Zr", lifetime: "200:00:00" },
   { code: "Zr_1.0mm", name: "Zr 1.0mm", series: "Zr", lifetime: "200:00:00" },
