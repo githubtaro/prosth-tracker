@@ -330,12 +330,13 @@
 const TYPES = ["クラウン", "ブリッジ", "前装冠(Cr)", "前装冠(Br)", "インレー", "支台", "3D模型片顎", "3D模型全顎"];
 const MATERIALS = ["銀合金", "チタン", "CAD/CAM冠", "PMMA", "Peek冠", "セラスマート", "石膏", "造形レジン", "ジルコニア", "e-max", "WAX"];
 const PRODUCT_NAMES = {
-  "CAD/CAM冠": ["刀アベンシアP", "刀アベンシアN", "Mazic Duro"],
+  "CAD/CAM冠": ["刀アベンシアP", "刀アベンシアN", "Mazic Duro", "松風"],
   "セラスマート": ["Prime", "300", "Layer"]
 };
-const SHADES = ["なし", "A1", "A2", "A3", "A3.5", "アイボリー", "ホワイト"];
+const SHADES = ["なし", "A1", "A2", "A3", "A3.5", "A4", "アイボリー", "ホワイト"];
 const PEEK_SHADES = ["なし", "アイボリー", "ホワイト"];
 const WAX_SHADES = ["なし"];
+const MATSUKAZE_SHADES = ["なし", "A1", "A2", "A3", "A3.5", "A4"];
 const NON_PEEK_SHADES = ["なし", "A1", "A2", "A3", "A3.5"];
 const FORM_TYPES = ["なし", "ディスク", "ブロック"];
 const DISC_SIZES = ["10", "12", "14", "16", "18", "20", "22", "25", "30"];
@@ -428,6 +429,7 @@ function renderChips(containerId, items, field) {
         if (field === "type") {
           renderVeneerSection();
           updateQtyLabel();
+          applyTypeAutoSettings();
         }
       }
     };
@@ -460,7 +462,7 @@ function renderMachineChips() {
 }
 
 function renderShadeChips() {
-  const allowed = selected.material === "Peek冠" ? PEEK_SHADES : selected.material === "WAX" ? WAX_SHADES : NON_PEEK_SHADES;
+  const allowed = selected.material === "Peek冠" ? PEEK_SHADES : selected.material === "WAX" ? WAX_SHADES : selected.productName === "松風" ? MATSUKAZE_SHADES : NON_PEEK_SHADES;
   if (selected.shade && !allowed.includes(selected.shade)) {
     selected.shade = "なし";
   }
@@ -496,7 +498,7 @@ function renderProductChips() {
     const btn = document.createElement("button");
     btn.className = "chip" + (selected.productName === p ? " selected" : "");
     btn.textContent = p;
-    btn.onclick = () => { selected.productName = p; renderProductChips(); applyAutoSettings(); };
+    btn.onclick = () => { selected.productName = p; renderProductChips(); renderShadeChips(); applyAutoSettings(); };
     el.appendChild(btn);
   });
 }
@@ -521,7 +523,28 @@ function renderFormType() {
   row.innerHTML = html;
 }
 
+function applyTypeAutoSettings() {
+  // 3D模型片顎 / 3D模型全顎 → 造形レジン・3Dプリンタを自動選択
+  if (selected.type === "3D模型片顎" || selected.type === "3D模型全顎") {
+    selected.material = "造形レジン";
+    selected.productName = "";
+    selected.machine = "3Dプリンタ";
+    renderChips("chips-material", MATERIALS, "material");
+    renderShadeChips();
+    renderProductChips();
+    renderMachineChips();
+    applyAutoSettings();
+  }
+}
+
 function applyAutoSettings() {
+  // 松風 → ブロック 14
+  if (selected.productName === "松風") {
+    selected.formType = "ブロック";
+    selected.formSize = "14";
+    renderFormType();
+    return;
+  }
   // 刀アベンシアP → ブロック 14
   if (selected.productName === "刀アベンシアP") {
     selected.formType = "ブロック";
