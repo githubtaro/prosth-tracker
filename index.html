@@ -503,6 +503,17 @@ function renderProductChips() {
   });
 }
 
+function getValidSizes(formType) {
+  // 複合ルール（加工物+素材）優先
+  if (selected.type === "支台" && selected.material === "石膏") return ["25", "30"];
+  // 商品名ルール、次に素材ルール
+  const pd = PRODUCT_FORM_DEFAULTS[selected.productName];
+  const md = MATERIAL_FORM_DEFAULTS[selected.material];
+  const def = pd || md;
+  if (def && def.validSizes) return def.validSizes;
+  return formType === "ディスク" ? DISC_SIZES : BLOCK_SIZES;
+}
+
 function renderFormType() {
   const row = document.getElementById("form-type-row");
   let html = "";
@@ -510,14 +521,16 @@ function renderFormType() {
     html += `<button class="form-radio${selected.formType === ft ? " selected" : ""}" onclick="selectFormType('${ft}')">${ft}</button>`;
   });
   if (selected.formType === "ディスク") {
+    const sizes = getValidSizes("ディスク");
     html += `<select class="size-select" id="sel-size" onchange="selectSize(this.value)">
       <option value="">サイズ</option>
-      ${DISC_SIZES.map(s => `<option value="${s}"${selected.formSize === s ? " selected" : ""}>${s}mm</option>`).join("")}
+      ${sizes.map(s => `<option value="${s}"${selected.formSize === s ? " selected" : ""}>${s}mm</option>`).join("")}
     </select>`;
   } else if (selected.formType === "ブロック") {
+    const sizes = getValidSizes("ブロック");
     html += `<select class="size-select" id="sel-size" onchange="selectSize(this.value)">
       <option value="">サイズ</option>
-      ${BLOCK_SIZES.map(s => `<option value="${s}"${selected.formSize === s ? " selected" : ""}>${s}</option>`).join("")}
+      ${sizes.map(s => `<option value="${s}"${selected.formSize === s ? " selected" : ""}>${s}</option>`).join("")}
     </select>`;
   }
   row.innerHTML = html;
@@ -537,60 +550,47 @@ function applyTypeAutoSettings() {
   }
 }
 
+// 商品名ベースの加工形態自動設定テーブル（商品名ルールは素材ルールより優先）
+const PRODUCT_FORM_DEFAULTS = {
+  "Mazic Duro":   { formType: "ブロック", formSize: "12"  },
+  "松風":          { formType: "ブロック", formSize: "14"  },
+  "刀アベンシアP": { formType: "ブロック", formSize: "14"  },
+  "刀アベンシアN": { formType: "ブロック", formSize: "14L" },
+};
+
+// 素材ベースの加工形態自動設定テーブル
+const MATERIAL_FORM_DEFAULTS = {
+  "Peek冠":     { formType: "ブロック", formSize: "14" },
+  "e-max":      { formType: "ブロック", formSize: "14", validSizes: ["14"] },
+  "セラスマート": { formType: "ブロック", formSize: "14" },
+  "WAX":        { formType: "ディスク", formSize: "12", validSizes: ["12", "14", "20", "25"] },
+  "チタン":     { formType: "ディスク", formSize: "10", validSizes: ["10", "12", "14", "16", "18", "20", "22", "25", "30"] },
+  "銀合金":     { formType: "ディスク", formSize: "10", validSizes: ["10", "12", "14", "16", "18", "20", "22", "25", "30"] },
+  "PMMA":       { formType: "ディスク", formSize: "16", validSizes: ["16", "20", "25", "30"] },
+  "ジルコニア":  { formType: "ディスク", formSize: "14", validSizes: ["14", "18", "22", "25"] },
+};
+
 function applyAutoSettings() {
-  // 松風 → ブロック 14
-  if (selected.productName === "松風") {
-    selected.formType = "ブロック";
-    selected.formSize = "14";
+  // 1. 商品名ルール（優先）
+  const pd = PRODUCT_FORM_DEFAULTS[selected.productName];
+  if (pd) {
+    selected.formType = pd.formType;
+    selected.formSize = pd.formSize;
     renderFormType();
     return;
   }
-  // 刀アベンシアP → ブロック 14
-  if (selected.productName === "刀アベンシアP") {
-    selected.formType = "ブロック";
-    selected.formSize = "14";
-    renderFormType();
-    return;
-  }
-  // 刀アベンシアN → ブロック 14L
-  if (selected.productName === "刀アベンシアN") {
-    selected.formType = "ブロック";
-    selected.formSize = "14L";
-    renderFormType();
-    return;
-  }
-  // 支台 + 石膏 → ディスク 30mm
+  // 2. 複合ルール（加工物+素材）
   if (selected.type === "支台" && selected.material === "石膏") {
     selected.formType = "ディスク";
     selected.formSize = "30";
     renderFormType();
     return;
   }
-  // WAX → ディスク
-  if (selected.material === "WAX") {
-    selected.formType = "ディスク";
-    selected.formSize = "";
-    renderFormType();
-    return;
-  }
-  // セラスマート → ブロック 14
-  if (selected.material === "セラスマート") {
-    selected.formType = "ブロック";
-    selected.formSize = "14";
-    renderFormType();
-    return;
-  }
-  // Peek冠 or e-max → ブロック
-  if (selected.material === "Peek冠" || selected.material === "e-max") {
-    selected.formType = "ブロック";
-    selected.formSize = "";
-    renderFormType();
-    return;
-  }
-  // チタン, 銀合金, PMMA, ジルコニア → ディスク
-  if (["チタン", "銀合金", "PMMA", "ジルコニア"].includes(selected.material)) {
-    selected.formType = "ディスク";
-    selected.formSize = "";
+  // 3. 素材ルール
+  const md = MATERIAL_FORM_DEFAULTS[selected.material];
+  if (md) {
+    selected.formType = md.formType;
+    selected.formSize = md.formSize;
     renderFormType();
     return;
   }
