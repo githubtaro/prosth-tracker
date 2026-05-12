@@ -216,6 +216,11 @@
     <div class="chips" id="chips-product"></div>
   </div>
 
+  <div class="field hidden" id="sub-product-field">
+    <label class="label">グレード</label>
+    <div class="chips" id="chips-sub-product"></div>
+  </div>
+
   <div class="field">
     <label class="label">シェード</label>
     <div class="chips" id="chips-shade"></div>
@@ -328,10 +333,13 @@
 
 <script>
 const TYPES = ["クラウン", "ブリッジ", "前装冠(Cr)", "前装冠(Br)", "インレー", "支台", "3D模型片顎", "3D模型全顎"];
-const MATERIALS = ["銀合金", "チタン", "CAD/CAM冠", "PMMA", "Peek冠", "セラスマート", "石膏", "造形レジン", "ジルコニア", "e-max", "WAX"];
+const MATERIALS = ["銀合金", "チタン", "CAD/CAM冠", "PMMA", "Peek冠", "石膏", "造形レジン", "ジルコニア", "e-max", "WAX"];
 const PRODUCT_NAMES = {
-  "CAD/CAM冠": ["刀アベンシアP", "刀アベンシアN", "Mazic Duro", "松風"],
-  "セラスマート": ["Prime", "300", "Layer"]
+  "CAD/CAM冠": ["刀アベンシアP", "刀アベンシアN", "Mazic Duro", "松風", "セラスマート"],
+};
+const SUB_PRODUCT_NAMES = {
+  "セラスマート": ["Prime", "270", "300", "Layer"],
+  "松風":         ["HARD", "HARDⅡ", "SUPER HARD"],
 };
 const SHADES = ["なし", "A1", "A2", "A3", "A3.5", "A4", "アイボリー", "ホワイト"];
 const PEEK_SHADES = ["なし", "アイボリー", "ホワイト"];
@@ -356,7 +364,6 @@ const MATERIAL_MACHINES = {
   "ジルコニア": ["Dry1", "Dry2"],
   "石膏":       ["Dry1", "Dry2"],
   "造形レジン": ["3Dプリンタ"],
-  "セラスマート": ["Wet1", "Wet2", "Dry1", "Dry2"]
 };
 
 // Type overrides (these take priority over material)
@@ -372,7 +379,7 @@ function getMachinesForSelection(type, material) {
 }
 
 let records = [];
-let selected = { type: "", material: "", productName: "", shade: "なし", machine: "", formType: "なし", formSize: "" };
+let selected = { type: "", material: "", productName: "", subProductName: "", shade: "なし", machine: "", formType: "なし", formSize: "" };
 let quantity = 1;
 let veneerQuantity = 1;
 let selectedMonth = "";
@@ -425,6 +432,7 @@ function renderChips(containerId, items, field) {
         if (field === "material") {
           renderShadeChips();
           renderProductChips();
+renderSubProductChips();
         }
         if (field === "type") {
           renderVeneerSection();
@@ -457,6 +465,22 @@ function renderMachineChips() {
     if (isAllowed) {
       btn.onclick = () => { selected.machine = m; renderMachineChips(); };
     }
+    el.appendChild(btn);
+  });
+}
+
+function renderSubProductChips() {
+  const field = document.getElementById("sub-product-field");
+  const subs = SUB_PRODUCT_NAMES[selected.productName];
+  if (!subs) { field.className = "field hidden"; return; }
+  field.className = "field";
+  const el = document.getElementById("chips-sub-product");
+  el.innerHTML = "";
+  subs.forEach(s => {
+    const btn = document.createElement("button");
+    btn.className = "chip" + (selected.subProductName === s ? " selected" : "");
+    btn.textContent = s;
+    btn.onclick = () => { selected.subProductName = s; renderSubProductChips(); };
     el.appendChild(btn);
   });
 }
@@ -498,7 +522,7 @@ function renderProductChips() {
     const btn = document.createElement("button");
     btn.className = "chip" + (selected.productName === p ? " selected" : "");
     btn.textContent = p;
-    btn.onclick = () => { selected.productName = p; renderProductChips(); renderShadeChips(); applyAutoSettings(); };
+    btn.onclick = () => { selected.productName = p; selected.subProductName = ""; renderProductChips(); renderSubProductChips(); renderShadeChips(); applyAutoSettings(); };
     el.appendChild(btn);
   });
 }
@@ -553,6 +577,7 @@ function applyTypeAutoSettings() {
 // 商品名ベースの加工形態自動設定テーブル（商品名ルールは素材ルールより優先）
 const PRODUCT_FORM_DEFAULTS = {
   "Mazic Duro":   { formType: "ブロック", formSize: "12"  },
+  "セラスマート":   { formType: "ブロック", formSize: "14"  },
   "松風":          { formType: "ブロック", formSize: "14"  },
   "刀アベンシアP": { formType: "ブロック", formSize: "14"  },
   "刀アベンシアN": { formType: "ブロック", formSize: "14L" },
@@ -681,6 +706,10 @@ function saveRecord() {
     showFeedback("商品名を選択してください", false);
     return;
   }
+  if (SUB_PRODUCT_NAMES[selected.productName] && !selected.subProductName) {
+    showFeedback("グレードを選択してください", false);
+    return;
+  }
   if (!selected.machine) {
     showFeedback("加工機を選択してください", false);
     return;
@@ -691,9 +720,11 @@ function saveRecord() {
   }
   // 確認モーダルを表示
   const fl = formLabel({ formType: selected.formType, formSize: selected.formSize });
-  const formRequiredMaterials = ["チタン", "銀合金", "PMMA", "WAX", "ジルコニア", "Peek冠", "e-max", "CAD/CAM冠", "石膏", "セラスマート"];
+  const formRequiredMaterials = ["チタン", "銀合金", "PMMA", "WAX", "ジルコニア", "Peek冠", "e-max", "CAD/CAM冠", "石膏"];
   const formWarn = selected.formType === "なし" && formRequiredMaterials.includes(selected.material);
-  const matDisplay = selected.productName ? selected.material + " / " + selected.productName : selected.material;
+  const matDisplay = selected.productName
+    ? selected.material + " / " + selected.productName + (selected.subProductName ? " / " + selected.subProductName : "")
+    : selected.material;
 
   let rows = [
     ["加工日", document.getElementById("inp-date").value],
@@ -735,6 +766,7 @@ function commitRecord() {
     type: selected.type,
     material: selected.material,
     productName: selected.productName || "",
+    subProductName: selected.subProductName || "",
     shade: selected.shade,
     machine: selected.machine,
     formType: selected.formType,
@@ -750,6 +782,7 @@ function commitRecord() {
   selected.type = "";
   selected.material = "";
   selected.productName = "";
+  selected.subProductName = "";
   selected.shade = "なし";
   selected.machine = "";
   selected.formType = "なし";
@@ -762,6 +795,7 @@ function commitRecord() {
   renderChips("chips-type", TYPES, "type");
   renderChips("chips-material", MATERIALS, "material");
   renderProductChips();
+  renderSubProductChips();
   renderShadeChips();
   renderMachineChips();
   renderFormType();
@@ -774,7 +808,7 @@ function commitRecord() {
 
 function renderToday() {
   const today = document.getElementById("inp-date").value;
-  const todayRecs = records.filter(r => r.date === today);
+  const todayRecs = records.filter(r => r.date === today).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const section = document.getElementById("today-section");
   if (todayRecs.length === 0) { section.className = "hidden"; return; }
   section.className = "";
@@ -790,7 +824,7 @@ function renderToday() {
     return `<div class="record-row">
       <div>
         <span class="record-type">${esc(r.type)}</span>
-        <span class="record-mat">${esc(r.material)}${r.productName ? " / " + esc(r.productName) : ""}</span>
+        <span class="record-mat">${esc(r.material)}${r.productName ? " / " + esc(r.productName) : ""}${r.subProductName ? " / " + esc(r.subProductName) : ""}</span>
         ${r.shade && r.shade !== "なし" ? `<span class="record-shade">${esc(r.shade)}</span>` : ""}
         ${r.machine ? `<span class="record-machine">${esc(r.machine)}</span>` : ""}
         ${fl ? `<span class="record-form">${esc(fl)}</span>` : ""}
@@ -839,7 +873,40 @@ function renderHistory() {
 
   const sortedEntries = (obj) => Object.entries(obj).sort((a,b) => b[1] - a[1]);
 
-  let html = `<div class="summary-box">
+  // 今日のサマリー
+  const todayStr2 = todayStr();
+  const todayFiltered = records.filter(r => r.date === todayStr2);
+  let todayHtml = "";
+  if (todayFiltered.length > 0) {
+    const todayTypeCounts = {}, todayMatCounts = {}, todayMachineCounts = {};
+    let tdTooth = 0, tdItem = 0, tdVeneer = 0;
+    todayFiltered.forEach(r => {
+      todayTypeCounts[r.type] = (todayTypeCounts[r.type] || 0) + r.quantity;
+      todayMatCounts[r.material] = (todayMatCounts[r.material] || 0) + r.quantity;
+      if (r.machine) todayMachineCounts[r.machine] = (todayMachineCounts[r.machine] || 0) + r.quantity;
+      if (is3DType(r.type)) { tdItem += r.quantity; } else { tdTooth += r.quantity; }
+      tdVeneer += (r.veneerQuantity || 0);
+    });
+    todayHtml = `<div class="summary-box" style="border-left:3px solid var(--color-primary,#1a6b4f);margin-bottom:12px">
+      <div class="summary-title">今日のサマリー（${totalsLabel(tdTooth, tdItem, tdVeneer)}）</div>
+      <div class="summary-cols">
+        <div>
+          <div class="summary-col-title">種類別</div>
+          ${sortedEntries(todayTypeCounts).map(([k,v]) => `<div class="summary-item"><span class="summary-item-name">${esc(k)}</span><span class="summary-item-count">${v}</span></div>`).join("")}
+        </div>
+        <div>
+          <div class="summary-col-title">素材別</div>
+          ${sortedEntries(todayMatCounts).map(([k,v]) => `<div class="summary-item"><span class="summary-item-name">${esc(k)}</span><span class="summary-item-count">${v}</span></div>`).join("")}
+        </div>
+        <div>
+          <div class="summary-col-title">加工機別</div>
+          ${sortedEntries(todayMachineCounts).map(([k,v]) => `<div class="summary-item"><span class="summary-item-name">${esc(k)}</span><span class="summary-item-count">${v}</span></div>`).join("")}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  let html = todayHtml + `<div class="summary-box">
     <div class="summary-title">月間サマリー（${totalsLabel(toothCount, itemCount, veneerTotal)}）</div>
     <div class="summary-cols">
       <div>
@@ -875,7 +942,7 @@ function renderHistory() {
         const fl = formLabel(r);
         const tm = r.createdAt ? new Date(r.createdAt).toLocaleTimeString("ja-JP", {hour:"2-digit",minute:"2-digit"}) : "";
         return `<div class="day-record">
-          <span>${tm ? `<span style="color:var(--color-text-tertiary,#bbb);font-size:12px;margin-right:6px">${tm}</span>` : ""}${esc(r.type)} / ${esc(r.material)}${r.productName ? " / " + esc(r.productName) : ""}${r.shade && r.shade !== "なし" ? ` / ${esc(r.shade)}` : ""}${r.machine ? ` [${esc(r.machine)}]` : ""}${fl ? ` [${esc(fl)}]` : ""}${r.memo ? ` (${esc(r.memo)})` : ""}</span>
+          <span>${tm ? `<span style="color:var(--color-text-tertiary,#bbb);font-size:12px;margin-right:6px">${tm}</span>` : ""}${esc(r.type)} / ${esc(r.material)}${r.productName ? " / " + esc(r.productName) : ""}${r.subProductName ? " / " + esc(r.subProductName) : ""}${r.shade && r.shade !== "なし" ? ` / ${esc(r.shade)}` : ""}${r.machine ? ` [${esc(r.machine)}]` : ""}${fl ? ` [${esc(fl)}]` : ""}${r.memo ? ` (${esc(r.memo)})` : ""}</span>
           <span style="display:flex;align-items:center;gap:6px;white-space:nowrap"><span class="day-record-qty">${formatQtyLabel(r)}</span><button onclick="deleteHistoryRecord('${r.id}')" style="background:none;border:none;color:#ccc;font-size:16px;cursor:pointer;padding:2px 6px">✕</button></span>
         </div>`;
       }).join("")}
@@ -896,9 +963,9 @@ function deleteHistoryRecord(id) {
 }
 
 function exportCSV() {
-  const header = "加工日,加工物,使用素材,商品名,シェード,加工機,加工形態,サイズ,数量,前装冠数,メモ,登録日時\n";
+  const header = "加工日,加工物,使用素材,商品名,グレード,シェード,加工機,加工形態,サイズ,数量,前装冠数,メモ,登録日時\n";
   const rows = [...records].sort((a,b) => a.date.localeCompare(b.date))
-    .map(r => `${r.date},${r.type},${r.material},${r.productName||""},${r.shade||"なし"},${r.machine||""},${r.formType||"なし"},${r.formSize||""},${r.quantity},${r.veneerQuantity||0},"${(r.memo||"").replace(/"/g,'""')}",${r.createdAt}`)
+    .map(r => `${r.date},${r.type},${r.material},${r.productName||""},${r.subProductName||""},${r.shade||"なし"},${r.machine||""},${r.formType||"なし"},${r.formSize||""},${r.quantity},${r.veneerQuantity||0},"${(r.memo||"").replace(/"/g,'""')}",${r.createdAt}`)
     .join("\n");
   const blob = new Blob(["\uFEFF" + header + rows], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
@@ -924,48 +991,49 @@ function importCSV(input) {
       }
       const header = lines[0];
       const hasProductName = header.includes("商品名");
+      const hasSubProductName = header.includes("グレード");
       const existingIds = new Set(records.map(r => r.createdAt));
       let imported = 0, skipped = 0;
       for (let i = 1; i < lines.length; i++) {
         const cols = parseCSVLine(lines[i]);
-        const minCols = hasProductName ? 12 : 11;
+        const minCols = hasSubProductName ? 13 : hasProductName ? 12 : 11;
         if (cols.length < minCols) { skipped++; continue; }
         let rec;
-        if (hasProductName) {
+        if (hasSubProductName) {
+          const createdAt = cols[12].trim();
+          if (existingIds.has(createdAt)) { skipped++; continue; }
+          rec = {
+            id: genId(),
+            date: cols[0].trim(), type: cols[1].trim(), material: cols[2].trim(),
+            productName: cols[3].trim() || "", subProductName: cols[4].trim() || "",
+            shade: cols[5].trim() || "なし", machine: cols[6].trim() || "",
+            formType: cols[7].trim() || "なし", formSize: cols[8].trim() || "",
+            quantity: parseInt(cols[9]) || 1, veneerQuantity: parseInt(cols[10]) || 0,
+            memo: cols[11].trim(), createdAt: createdAt
+          };
+        } else if (hasProductName) {
           const createdAt = cols[11].trim();
           if (existingIds.has(createdAt)) { skipped++; continue; }
           rec = {
             id: genId(),
-            date: cols[0].trim(),
-            type: cols[1].trim(),
-            material: cols[2].trim(),
-            productName: cols[3].trim() || "",
-            shade: cols[4].trim() || "なし",
-            machine: cols[5].trim() || "",
-            formType: cols[6].trim() || "なし",
-            formSize: cols[7].trim() || "",
-            quantity: parseInt(cols[8]) || 1,
-            veneerQuantity: parseInt(cols[9]) || 0,
-            memo: cols[10].trim(),
-            createdAt: createdAt
+            date: cols[0].trim(), type: cols[1].trim(), material: cols[2].trim(),
+            productName: cols[3].trim() || "", subProductName: "",
+            shade: cols[4].trim() || "なし", machine: cols[5].trim() || "",
+            formType: cols[6].trim() || "なし", formSize: cols[7].trim() || "",
+            quantity: parseInt(cols[8]) || 1, veneerQuantity: parseInt(cols[9]) || 0,
+            memo: cols[10].trim(), createdAt: createdAt
           };
         } else {
           const createdAt = cols[10].trim();
           if (existingIds.has(createdAt)) { skipped++; continue; }
           rec = {
             id: genId(),
-            date: cols[0].trim(),
-            type: cols[1].trim(),
-            material: cols[2].trim(),
-            productName: "",
-            shade: cols[3].trim() || "なし",
-            machine: cols[4].trim() || "",
-            formType: cols[5].trim() || "なし",
-            formSize: cols[6].trim() || "",
-            quantity: parseInt(cols[7]) || 1,
-            veneerQuantity: parseInt(cols[8]) || 0,
-            memo: cols[9].trim(),
-            createdAt: createdAt
+            date: cols[0].trim(), type: cols[1].trim(), material: cols[2].trim(),
+            productName: "", subProductName: "",
+            shade: cols[3].trim() || "なし", machine: cols[4].trim() || "",
+            formType: cols[5].trim() || "なし", formSize: cols[6].trim() || "",
+            quantity: parseInt(cols[7]) || 1, veneerQuantity: parseInt(cols[8]) || 0,
+            memo: cols[9].trim(), createdAt: createdAt
           };
         }
         if (!rec.date || !rec.type || !rec.material) { skipped++; continue; }
@@ -1182,22 +1250,30 @@ function esc(s) { const d = document.createElement("div"); d.textContent = s; re
 
 function migrateData() {
   let changed = false;
-  // セラスマート300 → セラスマート + productName
-  const smRecs = records.filter(r => r.material === "セラスマート300").sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  if (smRecs.length > 0) {
-    const mapping = ["300", "Prime"]; // 1件目=300, 2件目=Prime, 3件目以降=Layer
-    smRecs.forEach((r, i) => {
+  // セラスマート300 → セラスマート + productName（旧移行）
+  const smRecs300 = records.filter(r => r.material === "セラスマート300").sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  if (smRecs300.length > 0) {
+    const mapping = ["300", "Prime"];
+    smRecs300.forEach((r, i) => {
       r.material = "セラスマート";
       r.productName = i < mapping.length ? mapping[i] : "Layer";
     });
     changed = true;
   }
-  // productNameフィールドがないレコードに空文字を補完
+  // セラスマート（素材）→ CAD/CAM冠 + productName=セラスマート + subProductName
+  const smRecs = records.filter(r => r.material === "セラスマート");
+  if (smRecs.length > 0) {
+    smRecs.forEach(r => {
+      r.subProductName = r.productName || "";
+      r.material = "CAD/CAM冠";
+      r.productName = "セラスマート";
+    });
+    changed = true;
+  }
+  // productName/subProductNameフィールドがないレコードに空文字を補完
   records.forEach(r => {
-    if (r.productName === undefined) {
-      r.productName = "";
-      changed = true;
-    }
+    if (r.productName === undefined) { r.productName = ""; changed = true; }
+    if (r.subProductName === undefined) { r.subProductName = ""; changed = true; }
   });
   if (changed) persistRecords();
 }
